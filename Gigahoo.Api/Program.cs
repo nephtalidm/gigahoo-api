@@ -1,4 +1,5 @@
 using System.Text;
+using Gigahoo.Api.BackgroundServices;
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -65,6 +66,10 @@ try
     builder.Services.AddScoped<ISmsService, SmsService>();
     builder.Services.AddScoped<IStripeService, StripeService>();
     builder.Services.AddScoped<ITwilioService, TwilioService>();
+    builder.Services.AddScoped<IPhoneNumberCleanupService, PhoneNumberCleanupService>();
+
+    // Background services
+    builder.Services.AddHostedService<PhoneNumberCleanupBackgroundService>();
 
     // Rate limiting
     builder.Services.AddRateLimiter(options =>
