@@ -13,7 +13,8 @@ public class StripeWebhookController(
     GigahooDbContext db,
     IConfiguration config,
     ILogger<StripeWebhookController> logger,
-    ITwilioService twilio) : ControllerBase
+    ITwilioService twilio,
+    IEmailService email) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Handle()
@@ -126,13 +127,24 @@ public class StripeWebhookController(
                 {
                     // Assign number to account
                     await twilio.AssignNumberToAccountAsync(phoneNumber, account.Id);
-                    
+
                     account.PhoneNumberSid = phoneNumber.Sid;
                     account.TelephonyProvider = phoneNumber.Provider;
+                    account.ForwardingPhone = phoneNumber.Number;
 
                     // Configure webhook to point to voice agent
                     var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
                     await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
+
+                    // Send email to customer with their phone number
+                    try
+                    {
+                        await email.SendPhoneNumberAssignedAsync(account.Email, account.BusinessName, phoneNumber.Number);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.Id);
+                    }
 
                     logger.LogInformation("Assigned phone number {Number} to account {Account}", phoneNumber.Number, account.Id);
                 }
@@ -178,15 +190,16 @@ public class StripeWebhookController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.StripeSubscriptionId == subscription.Id);
         if (account is null) return;
 
-        // Release phone number if exists
+        // Release phone number back to pool (don't delete from Twilio)
         if (!string.IsNullOrEmpty(account.PhoneNumberSid))
         {
             try
             {
-                await twilio.ReleasePhoneNumberAsync(account.PhoneNumberSid);
+                await twilio.ReleaseNumberFromAccountAsync(account.Id);
                 account.PhoneNumberSid = null;
                 account.TelephonyProvider = null;
-                logger.LogInformation("Released phone number for account {Account}", account.Id);
+                account.ForwardingPhone = null;
+                logger.LogInformation("Released phone number back to pool for account {Account}", account.Id);
             }
             catch (Exception ex)
             {

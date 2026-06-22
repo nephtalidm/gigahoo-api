@@ -8,6 +8,7 @@ public interface IEmailService
 {
     Task SendMagicLinkAsync(string toEmail, string magicLink);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
+    Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -55,6 +56,37 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
 
         email.Body = new TextPart("html") { Text = body };
         await SendAsync(email);
+    }
+
+    public async Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber)
+    {
+        var message = new MimeMessage();
+        message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        message.To.Add(MailboxAddress.Parse(toEmail));
+        message.Subject = $"Your Gigahoo phone number is ready: {phoneNumber}";
+
+        var body = $"""
+            <html>
+            <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Your AI Receptionist Phone Number</h2>
+                <p>Hi {businessName},</p>
+                <p>Your dedicated phone number has been provisioned and is ready to receive calls:</p>
+                <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center;">
+                    <p style="font-size: 24px; font-weight: bold; margin: 0; color: #111827;">{phoneNumber}</p>
+                </div>
+                <p><strong>Next steps:</strong></p>
+                <ol>
+                    <li>Forward your existing business calls to this number</li>
+                    <li>Test the AI receptionist by calling the number yourself</li>
+                    <li>Configure your business details in the dashboard</li>
+                </ol>
+                <p style="color: #6b7280; font-size: 14px;">Need help? Contact us at support@gigahoo.com</p>
+            </body>
+            </html>
+            """;
+
+        message.Body = new TextPart("html") { Text = body };
+        await SendAsync(message);
     }
 
     private async Task SendAsync(MimeMessage message)
