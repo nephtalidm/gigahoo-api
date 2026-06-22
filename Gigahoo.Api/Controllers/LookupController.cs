@@ -7,6 +7,7 @@ namespace Gigahoo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("api")]
 public class LookupController(GigahooDbContext db) : ControllerBase
 {
     [HttpGet("countries")]

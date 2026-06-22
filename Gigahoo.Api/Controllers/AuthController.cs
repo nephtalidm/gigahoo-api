@@ -9,6 +9,7 @@ namespace Gigahoo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("auth")]
 public class AuthController(
     GigahooDbContext db,
     IJwtTokenService jwt,
@@ -71,7 +72,7 @@ public class AuthController(
     public async Task<IActionResult> SendMagicLink([FromBody] SendMagicLinkRequest request)
     {
         var code = await otp.GenerateAndStoreAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(15));
-        var link = $"{Request.Scheme}://{Request.Host}/api/auth/verify-magic-link?email={Uri.EscapeDataString(request.Email)}&code={code}";
+        var link = $"{Request.Scheme}://{Request.Host}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
 
         await email.SendMagicLinkAsync(request.Email, link);
         logger.LogInformation("Magic link sent to {Email}", request.Email);
@@ -79,21 +80,21 @@ public class AuthController(
         return Ok(new { message = "If an account exists, a magic link has been sent." });
     }
 
-    [HttpGet("verify-magic-link")]
-    public async Task<ActionResult<AuthResponse>> VerifyMagicLink([FromQuery] string email, [FromQuery] string code)
+    [HttpPost("verify-magic-link")]
+    public async Task<ActionResult<AuthResponse>> VerifyMagicLink([FromBody] VerifyMagicLinkRequest request)
     {
-        var valid = await otp.VerifyAsync(email, "EmailMagicLink", code);
+        var valid = await otp.VerifyAsync(request.Email, "EmailMagicLink", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired link" });
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == email.ToLowerInvariant());
+        var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == request.Email.ToLowerInvariant());
         var isNew = user is null;
 
         if (isNew)
         {
             user = new User
             {
-                Email = email,
-                NormalizedEmail = email.ToLowerInvariant(),
+                Email = request.Email,
+                NormalizedEmail = request.Email.ToLowerInvariant(),
                 IsEmailConfirmed = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,

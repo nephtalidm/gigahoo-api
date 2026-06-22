@@ -35,7 +35,7 @@ public class StripeService(IConfiguration config) : IStripeService
         var options = new SubscriptionCreateOptions
         {
             Customer = customerId,
-            Items = [{ Price = priceId }],
+            Items = new List<SubscriptionItemOptions> { new() { Price = priceId } },
             PaymentBehavior = "default_incomplete",
         };
         options.AddExpand("latest_invoice.payment_intent");
@@ -49,13 +49,13 @@ public class StripeService(IConfiguration config) : IStripeService
     {
         StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
 
-        var options = new SessionCreateOptions
+        var options = new Stripe.BillingPortal.SessionCreateOptions
         {
             Customer = customerId,
             ReturnUrl = returnUrl,
         };
 
-        var service = new SessionService();
+        var service = new Stripe.BillingPortal.SessionService();
         var session = service.Create(options);
         return Task.FromResult(session.Url);
     }

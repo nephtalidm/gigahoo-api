@@ -9,6 +9,7 @@ namespace Gigahoo.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("api")]
 public class CallsController(GigahooDbContext db) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
@@ -20,6 +21,9 @@ public class CallsController(GigahooDbContext db) : ControllerBase
         [FromQuery] string? status = null)
     {
         var accountId = GetAccountId();
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
         var query = db.Calls
             .Include(c => c.Language)

@@ -10,6 +10,7 @@ namespace Gigahoo.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("api")]
 public class BillingController(
     GigahooDbContext db,
     IStripeService stripe) : ControllerBase
@@ -26,8 +27,8 @@ public class BillingController(
 
         var remaining = Math.Max(0, account.Plan.IncludedMinutes - account.MinutesUsed);
         var usagePercent = account.Plan.IncludedMinutes > 0
-            ? Math.Round((double)account.MinutesUsed / account.Plan.IncludedMinutes * 100, 1)
-            : 0;
+            ? (decimal)Math.Round((double)account.MinutesUsed / account.Plan.IncludedMinutes * 100, 1)
+            : 0m;
 
         var billingPeriod = account.BillingPeriodStart.HasValue && account.BillingPeriodEnd.HasValue
             ? $"{account.BillingPeriodStart:MMM d} - {account.BillingPeriodEnd:MMM d}"

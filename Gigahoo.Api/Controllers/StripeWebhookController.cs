@@ -35,10 +35,10 @@ public class StripeWebhookController(
         switch (stripeEvent.Type)
         {
             case "invoice.paid":
-                await HandleInvoicePaid(stripeEvent.Data.Object as Invoice);
+                await HandleInvoicePaid(stripeEvent.Data.Object as Stripe.Invoice);
                 break;
             case "invoice.payment_failed":
-                await HandlePaymentFailed(stripeEvent.Data.Object as Invoice);
+                await HandlePaymentFailed(stripeEvent.Data.Object as Stripe.Invoice);
                 break;
             case "customer.subscription.updated":
                 await HandleSubscriptionUpdated(stripeEvent.Data.Object as Subscription);
@@ -61,7 +61,7 @@ public class StripeWebhookController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
         if (account is null) return;
 
-        db.Invoices.Add(new Invoice
+        db.Invoices.Add(new Entities.Invoice
         {
             AccountId = account.Id,
             StripeInvoiceId = invoice.Id,

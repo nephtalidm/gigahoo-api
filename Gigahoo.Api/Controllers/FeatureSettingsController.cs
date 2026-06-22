@@ -10,6 +10,7 @@ namespace Gigahoo.Api.Controllers;
 [ApiController]
 [Route("api/features")]
 [Authorize]
+[EnableRateLimiting("api")]
 public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);

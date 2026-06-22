@@ -8,6 +8,7 @@ namespace Gigahoo.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("auth")]
 public class ContactController(
     GigahooDbContext db,
     IEmailService email) : ControllerBase

@@ -30,7 +30,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             </html>
             """;
 
-        message.SetBody(new TextPart("html") { Text = body });
+        message.Body = new TextPart("html") { Text = body };
         await SendAsync(message);
     }
 
@@ -53,7 +53,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             </html>
             """;
 
-        email.SetBody(new TextPart("html") { Text = body });
+        email.Body = new TextPart("html") { Text = body };
         await SendAsync(email);
     }
 

@@ -10,6 +10,7 @@ namespace Gigahoo.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting("api")]
 public class AccountController(GigahooDbContext db) : ControllerBase
 {
     private Guid GetUserId() => Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
