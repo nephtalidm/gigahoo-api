@@ -85,22 +85,56 @@ public class StripeWebhookController(
             try
             {
                 var countryCode = account.Country?.Code ?? "US";
-                var phoneNumberSid = await twilio.PurchasePhoneNumberAsync(countryCode);
-
-                if (phoneNumberSid is not null)
+                
+                // First, try to get an available number from the pool
+                var phoneNumber = await twilio.GetAvailableNumberAsync(countryCode);
+                
+                if (phoneNumber == null)
                 {
-                    account.PhoneNumberSid = phoneNumberSid;
-                    account.TelephonyProvider = "twilio";
+                    // No available number in pool, purchase a new one
+                    var phoneNumberSid = await twilio.PurchasePhoneNumberAsync(countryCode);
+                    
+                    if (phoneNumberSid is not null)
+                    {
+                        // Get the phone number details from Twilio
+                        Twilio.TwilioClient.Init(config["Twilio:AccountSid"]!, config["Twilio:AuthToken"]!);
+                        var twilioNumber = await Twilio.Rest.Api.V2010.Account.IncomingPhoneNumberResource.FetchAsync(phoneNumberSid);
+                        
+                        // Add to pool
+                        phoneNumber = new Entities.PhoneNumber
+                        {
+                            Sid = phoneNumberSid,
+                            Number = twilioNumber.PhoneNumber.ToString(),
+                            CountryCode = countryCode,
+                            Provider = "twilio",
+                            Status = Entities.PhoneNumberStatus.Available,
+                            MonthlyCost = 1.15m,
+                            PurchasedAt = DateTime.UtcNow
+                        };
+                        db.PhoneNumbers.Add(phoneNumber);
+                        await db.SaveChangesAsync();
+                        
+                        logger.LogInformation("Purchased new phone number {Number} and added to pool", twilioNumber.PhoneNumber);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Failed to purchase phone number for account {Account}", account.Id);
+                    }
+                }
+                
+                if (phoneNumber != null)
+                {
+                    // Assign number to account
+                    await twilio.AssignNumberToAccountAsync(phoneNumber, account.Id);
+                    
+                    account.PhoneNumberSid = phoneNumber.Sid;
+                    account.TelephonyProvider = phoneNumber.Provider;
 
                     // Configure webhook to point to voice agent
                     var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
-                    await twilio.ConfigureWebhookAsync(phoneNumberSid, webhookUrl);
+                    await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
 
-                    logger.LogInformation("Provisioned phone number for account {Account}: {PhoneNumberSid}", account.Id, phoneNumberSid);
-                }
-                else
-                {
-                    logger.LogWarning("Failed to provision phone number for account {Account}", account.Id);
+                    logger.LogInformation("Assigned phone number {Number} to account {Account}", phoneNumber.Number, account.Id);
                 }
             }
             catch (Exception ex)

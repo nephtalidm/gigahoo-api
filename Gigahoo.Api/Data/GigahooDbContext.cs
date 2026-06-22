@@ -20,6 +20,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
+    public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -151,6 +152,21 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.ToTable("ContactSubmissions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.CreatedAt).IsDescending();
+        });
+
+        // PhoneNumber
+        modelBuilder.Entity<PhoneNumber>(e =>
+        {
+            e.ToTable("PhoneNumbers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Sid).IsUnique();
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => new { x.CountryCode, x.Status });
+            e.HasIndex(x => x.AssignedAccountId);
+            e.Property(x => x.CountryCode).IsFixedLength().HasMaxLength(2);
+            e.Property(x => x.MonthlyCost).HasColumnType("decimal(10,2)");
+            e.Property(x => x.Status).HasConversion<string>(); // Store enum as string
+            e.HasOne(x => x.AssignedAccount).WithMany().HasForeignKey(x => x.AssignedAccountId);
         });
     }
 }
