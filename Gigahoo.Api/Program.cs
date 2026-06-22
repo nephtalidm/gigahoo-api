@@ -64,6 +64,7 @@ try
     builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<ISmsService, SmsService>();
     builder.Services.AddScoped<IStripeService, StripeService>();
+    builder.Services.AddScoped<ITwilioService, TwilioService>();
 
     // Rate limiting
     builder.Services.AddRateLimiter(options =>

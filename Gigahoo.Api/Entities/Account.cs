@@ -25,6 +25,8 @@ public class Account
 
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
+    public string? PhoneNumberSid { get; set; }
+    public string? TelephonyProvider { get; set; }
     public DateOnly? BillingPeriodStart { get; set; }
     public DateOnly? BillingPeriodEnd { get; set; }
     public int MinutesUsed { get; set; }

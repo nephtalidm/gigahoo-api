@@ -1,5 +1,6 @@
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Entities;
+using Gigahoo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
@@ -11,7 +12,8 @@ namespace Gigahoo.Api.Controllers;
 public class StripeWebhookController(
     GigahooDbContext db,
     IConfiguration config,
-    ILogger<StripeWebhookController> logger) : ControllerBase
+    ILogger<StripeWebhookController> logger,
+    ITwilioService twilio) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Handle()
@@ -58,9 +60,12 @@ public class StripeWebhookController(
     {
         if (invoice is null) return;
 
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
+        var account = await db.Accounts
+            .Include(a => a.Country)
+            .FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
         if (account is null) return;
 
+        // Record the invoice
         db.Invoices.Add(new Entities.Invoice
         {
             AccountId = account.Id,
@@ -73,6 +78,36 @@ public class StripeWebhookController(
             PdfUrl = invoice.HostedInvoiceUrl,
             CreatedAt = DateTime.UtcNow,
         });
+
+        // Provision phone number if not already done
+        if (string.IsNullOrEmpty(account.PhoneNumberSid))
+        {
+            try
+            {
+                var countryCode = account.Country?.Code ?? "US";
+                var phoneNumberSid = await twilio.PurchasePhoneNumberAsync(countryCode);
+
+                if (phoneNumberSid is not null)
+                {
+                    account.PhoneNumberSid = phoneNumberSid;
+                    account.TelephonyProvider = "twilio";
+
+                    // Configure webhook to point to voice agent
+                    var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
+                    await twilio.ConfigureWebhookAsync(phoneNumberSid, webhookUrl);
+
+                    logger.LogInformation("Provisioned phone number for account {Account}: {PhoneNumberSid}", account.Id, phoneNumberSid);
+                }
+                else
+                {
+                    logger.LogWarning("Failed to provision phone number for account {Account}", account.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error provisioning phone number for account {Account}", account.Id);
+            }
+        }
 
         await db.SaveChangesAsync();
         logger.LogInformation("Invoice {Id} recorded for account {Account}", invoice.Id, account.Id);
@@ -108,6 +143,22 @@ public class StripeWebhookController(
 
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.StripeSubscriptionId == subscription.Id);
         if (account is null) return;
+
+        // Release phone number if exists
+        if (!string.IsNullOrEmpty(account.PhoneNumberSid))
+        {
+            try
+            {
+                await twilio.ReleasePhoneNumberAsync(account.PhoneNumberSid);
+                account.PhoneNumberSid = null;
+                account.TelephonyProvider = null;
+                logger.LogInformation("Released phone number for account {Account}", account.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error releasing phone number for account {Account}", account.Id);
+            }
+        }
 
         account.StripeSubscriptionId = null;
         account.PlanId = 1; // Downgrade to Free
