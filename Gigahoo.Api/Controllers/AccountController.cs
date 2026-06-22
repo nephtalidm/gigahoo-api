@@ -77,6 +77,8 @@ public class AccountController(GigahooDbContext db) : ControllerBase
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
         account.WebsiteUrl = request.WebsiteUrl;
+        account.ServiceArea = request.ServiceArea;
+        account.BusinessHours = request.BusinessHours;
         account.AddressLine1 = request.AddressLine1;
         account.AddressLine2 = request.AddressLine2;
         account.City = request.City;
@@ -95,6 +97,23 @@ public class AccountController(GigahooDbContext db) : ControllerBase
             await db.Entry(account).Reference(a => a.Region).LoadAsync();
 
         return Ok(await MapToResponse(account));
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts
+            .Include(a => a.User)
+            .FirstOrDefaultAsync(a => a.Id == accountId);
+
+        if (account is null) return NotFound();
+
+        // Delete the user (this will cascade delete the account due to foreign key)
+        db.Users.Remove(account.User);
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Account deleted successfully" });
     }
 
     private async Task<AccountResponse> MapToResponse(Account account)

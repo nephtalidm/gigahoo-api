@@ -44,6 +44,12 @@ public record UpdateAccountRequest
     public string? WebsiteUrl { get; init; }
 
     [MaxLength(200)]
+    public string? ServiceArea { get; init; }
+
+    [MaxLength(200)]
+    public string? BusinessHours { get; init; }
+
+    [MaxLength(200)]
     public string? AddressLine1 { get; init; }
 
     [MaxLength(200)]

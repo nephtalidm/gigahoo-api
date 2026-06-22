@@ -27,12 +27,19 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
         var settings = await db.FeatureSettings.FirstOrDefaultAsync(f => f.AccountId == accountId);
         if (settings is null)
         {
-            return Ok(new FeatureSettingsResponse(false, null, false, 50, false, 0));
+            return Ok(new FeatureSettingsResponse(false, null, null, null, null, null, null, null, null, false, 50, false, 0));
         }
 
         return Ok(new FeatureSettingsResponse(
             settings.AnswerQuestions,
             settings.ServicesInfo,
+            settings.ServiceAreas,
+            settings.BusinessHours,
+            settings.EmergencyAvailability,
+            settings.PricingPolicy,
+            settings.WarrantyPolicy,
+            settings.FrequentlyAskedQuestions,
+            settings.AdditionalBusinessInfo,
             settings.ServeArea,
             settings.DistanceKm,
             settings.QuoteInspection,
@@ -58,6 +65,13 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
                 AccountId = accountId,
                 AnswerQuestions = request.AnswerQuestions,
                 ServicesInfo = request.ServicesInfo,
+                ServiceAreas = request.ServiceAreas,
+                BusinessHours = request.BusinessHours,
+                EmergencyAvailability = request.EmergencyAvailability,
+                PricingPolicy = request.PricingPolicy,
+                WarrantyPolicy = request.WarrantyPolicy,
+                FrequentlyAskedQuestions = request.FrequentlyAskedQuestions,
+                AdditionalBusinessInfo = request.AdditionalBusinessInfo,
                 ServeArea = request.ServeArea,
                 DistanceKm = Math.Clamp(request.DistanceKm, 1, 1000),
                 QuoteInspection = request.QuoteInspection,
@@ -70,6 +84,13 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
         {
             settings.AnswerQuestions = request.AnswerQuestions;
             settings.ServicesInfo = request.ServicesInfo;
+            settings.ServiceAreas = request.ServiceAreas;
+            settings.BusinessHours = request.BusinessHours;
+            settings.EmergencyAvailability = request.EmergencyAvailability;
+            settings.PricingPolicy = request.PricingPolicy;
+            settings.WarrantyPolicy = request.WarrantyPolicy;
+            settings.FrequentlyAskedQuestions = request.FrequentlyAskedQuestions;
+            settings.AdditionalBusinessInfo = request.AdditionalBusinessInfo;
             settings.ServeArea = request.ServeArea;
             settings.DistanceKm = Math.Clamp(request.DistanceKm, 1, 1000);
             settings.QuoteInspection = request.QuoteInspection;
@@ -82,6 +103,13 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
         return Ok(new FeatureSettingsResponse(
             settings.AnswerQuestions,
             settings.ServicesInfo,
+            settings.ServiceAreas,
+            settings.BusinessHours,
+            settings.EmergencyAvailability,
+            settings.PricingPolicy,
+            settings.WarrantyPolicy,
+            settings.FrequentlyAskedQuestions,
+            settings.AdditionalBusinessInfo,
             settings.ServeArea,
             settings.DistanceKm,
             settings.QuoteInspection,

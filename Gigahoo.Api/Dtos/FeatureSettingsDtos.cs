@@ -9,6 +9,27 @@ public record UpdateFeatureSettingsRequest
     [MaxLength(2000)]
     public string? ServicesInfo { get; init; }
 
+    [MaxLength(500)]
+    public string? ServiceAreas { get; init; }
+
+    [MaxLength(500)]
+    public string? BusinessHours { get; init; }
+
+    [MaxLength(500)]
+    public string? EmergencyAvailability { get; init; }
+
+    [MaxLength(2000)]
+    public string? PricingPolicy { get; init; }
+
+    [MaxLength(2000)]
+    public string? WarrantyPolicy { get; init; }
+
+    [MaxLength(5000)]
+    public string? FrequentlyAskedQuestions { get; init; }
+
+    [MaxLength(2000)]
+    public string? AdditionalBusinessInfo { get; init; }
+
     public bool ServeArea { get; init; }
 
     [Range(1, 1000)]
@@ -23,6 +44,13 @@ public record UpdateFeatureSettingsRequest
 public record FeatureSettingsResponse(
     bool AnswerQuestions,
     string? ServicesInfo,
+    string? ServiceAreas,
+    string? BusinessHours,
+    string? EmergencyAvailability,
+    string? PricingPolicy,
+    string? WarrantyPolicy,
+    string? FrequentlyAskedQuestions,
+    string? AdditionalBusinessInfo,
     bool ServeArea,
     int DistanceKm,
     bool QuoteInspection,
