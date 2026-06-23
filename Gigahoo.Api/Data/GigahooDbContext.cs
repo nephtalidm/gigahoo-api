@@ -24,30 +24,28 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasDefaultSchema("app");
-
         // Plan
-        modelBuilder.Entity<Plan>().ToTable("Plans").HasKey(e => e.Id);
+        modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.Id);
 
         // BusinessCategory
-        modelBuilder.Entity<BusinessCategory>().ToTable("BusinessCategories").HasKey(e => e.Id);
+        modelBuilder.Entity<BusinessCategory>().ToTable("BusinessCategory").HasKey(e => e.Id);
 
         // Country
         modelBuilder.Entity<Country>(e =>
         {
-            e.ToTable("Countries");
+            e.ToTable("Country");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Code).IsUnique();
             e.Property(x => x.Code).IsFixedLength().HasMaxLength(2);
         });
 
         // Language
-        modelBuilder.Entity<Language>().ToTable("Languages").HasKey(e => e.Id);
+        modelBuilder.Entity<Language>().ToTable("Language").HasKey(e => e.Id);
 
         // Region
         modelBuilder.Entity<Region>(e =>
         {
-            e.ToTable("Regions");
+            e.ToTable("Region");
             e.HasKey(x => x.Id);
             e.HasOne<Country>().WithMany().HasForeignKey(x => x.CountryId);
             e.HasIndex(x => new { x.CountryId, x.Code }).IsUnique();
@@ -56,7 +54,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // User
         modelBuilder.Entity<User>(e =>
         {
-            e.ToTable("Users");
+            e.ToTable("User");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("[NormalizedEmail] IS NOT NULL");
             e.HasIndex(x => x.NormalizedPhone).IsUnique().HasFilter("[NormalizedPhone] IS NOT NULL");
@@ -68,7 +66,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // Account
         modelBuilder.Entity<Account>(e =>
         {
-            e.ToTable("Accounts");
+            e.ToTable("Account");
             e.HasKey(x => x.Id);
             e.HasOne(x => x.User).WithOne(x => x.Account).HasForeignKey<Account>(x => x.UserId);
             e.HasOne(x => x.Plan).WithMany().HasForeignKey(x => x.PlanId);
@@ -80,10 +78,10 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
         });
 
-        // FeatureSettings
+        // FeatureSetting
         modelBuilder.Entity<FeatureSettings>(e =>
         {
-            e.ToTable("FeatureSettings");
+            e.ToTable("FeatureSetting");
             e.HasKey(x => x.AccountId);
             e.HasOne(x => x.Account).WithOne(x => x.FeatureSettings).HasForeignKey<FeatureSettings>(x => x.AccountId);
         });
@@ -91,7 +89,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // Call
         modelBuilder.Entity<Call>(e =>
         {
-            e.ToTable("Calls");
+            e.ToTable("Call");
             e.HasKey(x => x.Id);
             e.HasOne(x => x.Account).WithMany(x => x.Calls).HasForeignKey(x => x.AccountId);
             e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
@@ -111,7 +109,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // Invoice
         modelBuilder.Entity<Invoice>(e =>
         {
-            e.ToTable("Invoices");
+            e.ToTable("Invoice");
             e.HasKey(x => x.Id);
             e.HasOne(x => x.Account).WithMany(x => x.Invoices).HasForeignKey(x => x.AccountId);
             e.HasIndex(x => new { x.AccountId, x.DateUtc }).IsDescending(false, true);
@@ -121,7 +119,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // PaymentMethod
         modelBuilder.Entity<PaymentMethod>(e =>
         {
-            e.ToTable("PaymentMethods");
+            e.ToTable("PaymentMethod");
             e.HasKey(x => x.Id);
             e.HasOne(x => x.Account).WithMany(x => x.PaymentMethods).HasForeignKey(x => x.AccountId);
             e.HasIndex(x => x.AccountId);
@@ -131,7 +129,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // RefreshToken
         modelBuilder.Entity<RefreshToken>(e =>
         {
-            e.ToTable("RefreshTokens");
+            e.ToTable("RefreshToken");
             e.HasKey(x => x.Id);
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => x.Token).IsUnique();
@@ -141,7 +139,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // OtpCode
         modelBuilder.Entity<OtpCode>(e =>
         {
-            e.ToTable("OtpCodes");
+            e.ToTable("OtpCode");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Identifier, x.Type }).HasFilter("[IsUsed] = 0");
         });
@@ -149,7 +147,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // ContactSubmission
         modelBuilder.Entity<ContactSubmission>(e =>
         {
-            e.ToTable("ContactSubmissions");
+            e.ToTable("ContactSubmission");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.CreatedAt).IsDescending();
         });
@@ -157,7 +155,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // PhoneNumber
         modelBuilder.Entity<PhoneNumber>(e =>
         {
-            e.ToTable("PhoneNumbers");
+            e.ToTable("PhoneNumber");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Sid).IsUnique();
             e.HasIndex(x => x.Status);

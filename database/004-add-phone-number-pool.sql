@@ -1,13 +1,13 @@
--- Migration: Add PhoneNumber pool table for reuse
+﻿-- Migration: Add PhoneNumber pool table for reuse
 -- Date: 2026-06-22
 
 USE [Gigahoo];
 GO
 
 -- Create PhoneNumber pool table
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PhoneNumbers' AND schema_id = SCHEMA_ID('app'))
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PhoneNumber' AND schema_id = SCHEMA_ID('app'))
 BEGIN
-    CREATE TABLE [app].[PhoneNumbers] (
+    CREATE TABLE [dbo].[PhoneNumber] (
         [Id]                UNIQUEIDENTIFIER    NOT NULL PRIMARY KEY DEFAULT NEWID(),
         [Sid]               NVARCHAR(100)       NOT NULL UNIQUE,
         [Number]            NVARCHAR(20)        NOT NULL,
@@ -23,9 +23,9 @@ BEGIN
         [UpdatedAt]         DATETIME2           NOT NULL DEFAULT SYSUTCDATETIME()
     );
 
-    CREATE INDEX [IX_PhoneNumbers_Status] ON [app].[PhoneNumbers] ([Status]);
-    CREATE INDEX [IX_PhoneNumbers_CountryCode_Status] ON [app].[PhoneNumbers] ([CountryCode], [Status]);
-    CREATE INDEX [IX_PhoneNumbers_AssignedAccountId] ON [app].[PhoneNumbers] ([AssignedAccountId]);
+    CREATE INDEX [IX_PhoneNumbers_Status] ON [dbo].[PhoneNumber] ([Status]);
+    CREATE INDEX [IX_PhoneNumbers_CountryCode_Status] ON [dbo].[PhoneNumber] ([CountryCode], [Status]);
+    CREATE INDEX [IX_PhoneNumbers_AssignedAccountId] ON [dbo].[PhoneNumber] ([AssignedAccountId]);
 END
 GO
 

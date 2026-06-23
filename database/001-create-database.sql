@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- Gigahoo Database Creation Script
 -- SQL Server 2022+ / Azure SQL
 -- ============================================================
@@ -17,15 +17,15 @@ GO
 -- SCHEMA
 -- ============================================================
 IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = N'app')
-    EXEC('CREATE SCHEMA [app]');
+    EXEC('CREATE SCHEMA [dbo]');
 GO
 
 -- ============================================================
 -- ENUM / LOOKUP TABLES
 -- ============================================================
 
--- Plans
-CREATE TABLE [app].[Plans] (
+-- Plan
+CREATE TABLE [dbo].[Plan] (
     [Id]                TINYINT         NOT NULL PRIMARY KEY,
     [Name]              NVARCHAR(50)    NOT NULL,
     [PriceMonthly]       DECIMAL(10,2)   NOT NULL DEFAULT 0,
@@ -34,7 +34,7 @@ CREATE TABLE [app].[Plans] (
     [IsActive]          BIT             NOT NULL DEFAULT 1
 );
 
-INSERT INTO [app].[Plans] ([Id], [Name], [PriceMonthly], [IncludedMinutes], [HasOptionalFeatures])
+INSERT INTO [dbo].[Plan] ([Id], [Name], [PriceMonthly], [IncludedMinutes], [HasOptionalFeatures])
 VALUES
     (1, N'Free',     0.00,   25,   0),
     (2, N'Starter', 49.00,  250,   0),
@@ -42,19 +42,19 @@ VALUES
 GO
 
 -- Business Categories
-CREATE TABLE [app].[BusinessCategories] (
+CREATE TABLE [dbo].[BusinessCategory] (
     [Id]    TINYINT         NOT NULL PRIMARY KEY IDENTITY(1,1),
     [Name]  NVARCHAR(100)   NOT NULL UNIQUE
 );
 
-INSERT INTO [app].[BusinessCategories] ([Name]) VALUES
+INSERT INTO [dbo].[BusinessCategory] ([Name]) VALUES
     (N'Appliance Repair'), (N'Cleaning'), (N'Electrical'),
     (N'Garage Door Repair'), (N'HVAC'), (N'Locksmith'),
     (N'Plumbing'), (N'Roofing'), (N'Other');
 GO
 
--- Countries
-CREATE TABLE [app].[Countries] (
+-- Country
+CREATE TABLE [dbo].[Country] (
     [Id]        SMALLINT    NOT NULL PRIMARY KEY IDENTITY(1,1),
     [Name]      NVARCHAR(100) NOT NULL,
     [Code]      CHAR(2)     NOT NULL UNIQUE,   -- ISO 3166-1 alpha-2
@@ -62,7 +62,7 @@ CREATE TABLE [app].[Countries] (
     [Flag]      NVARCHAR(10) NULL
 );
 
-INSERT INTO [app].[Countries] ([Name], [Code], [DialCode], [Flag]) VALUES
+INSERT INTO [dbo].[Country] ([Name], [Code], [DialCode], [Flag]) VALUES
     (N'Canada',            N'CA', N'+1',  N'🇨🇦'),
     (N'Mexico',            N'MX', N'+52', N'🇲🇽'),
     (N'Australia',         N'AU', N'+61', N'🇦🇺'),
@@ -84,30 +84,30 @@ INSERT INTO [app].[Countries] ([Name], [Code], [DialCode], [Flag]) VALUES
     (N'Other',             N'XX', N'+0',  N'');
 GO
 
--- Supported Languages
-CREATE TABLE [app].[Languages] (
+-- Supported Language
+CREATE TABLE [dbo].[Language] (
     [Id]    TINYINT         NOT NULL PRIMARY KEY IDENTITY(1,1),
     [Name]  NVARCHAR(50)    NOT NULL UNIQUE
 );
 
-INSERT INTO [app].[Languages] ([Name]) VALUES
+INSERT INTO [dbo].[Language] ([Name]) VALUES
     (N'English'), (N'French'), (N'Mandarin'), (N'Cantonese'),
     (N'Spanish'), (N'Japanese'), (N'Hindi'), (N'Korean'), (N'Tagalog');
 GO
 
--- Regions (States/Provinces)
-CREATE TABLE [app].[Regions] (
+-- Region (States/Provinces)
+CREATE TABLE [dbo].[Region] (
     [Id]        SMALLINT    NOT NULL PRIMARY KEY IDENTITY(1,1),
-    [CountryId] SMALLINT    NOT NULL REFERENCES [app].[Countries]([Id]),
+    [CountryId] SMALLINT    NOT NULL REFERENCES [dbo].[Country]([Id]),
     [Name]      NVARCHAR(100) NOT NULL,
     [Code]      NVARCHAR(10) NOT NULL,
     CONSTRAINT [UQ_Regions_Country_Code] UNIQUE ([CountryId], [Code])
 );
 
 -- US States
-INSERT INTO [app].[Regions] ([CountryId], [Name], [Code])
+INSERT INTO [dbo].[Region] ([CountryId], [Name], [Code])
 SELECT c.[Id], v.[Name], v.[Code]
-FROM [app].[Countries] c
+FROM [dbo].[Country] c
 CROSS JOIN (VALUES
     (N'Alabama',N'AL'),(N'Alaska',N'AK'),(N'Arizona',N'AZ'),(N'Arkansas',N'AR'),
     (N'California',N'CA'),(N'Colorado',N'CO'),(N'Connecticut',N'CT'),(N'Delaware',N'DE'),
@@ -126,9 +126,9 @@ CROSS JOIN (VALUES
 WHERE c.[Code] = N'US';
 
 -- Canadian Provinces
-INSERT INTO [app].[Regions] ([CountryId], [Name], [Code])
+INSERT INTO [dbo].[Region] ([CountryId], [Name], [Code])
 SELECT c.[Id], v.[Name], v.[Code]
-FROM [app].[Countries] c
+FROM [dbo].[Country] c
 CROSS JOIN (VALUES
     (N'Alberta',N'AB'),(N'British Columbia',N'BC'),(N'Manitoba',N'MB'),
     (N'New Brunswick',N'NB'),(N'Newfoundland and Labrador',N'NL'),
@@ -139,9 +139,9 @@ CROSS JOIN (VALUES
 WHERE c.[Code] = N'CA';
 
 -- Mexican States
-INSERT INTO [app].[Regions] ([CountryId], [Name], [Code])
+INSERT INTO [dbo].[Region] ([CountryId], [Name], [Code])
 SELECT c.[Id], v.[Name], v.[Code]
-FROM [app].[Countries] c
+FROM [dbo].[Country] c
 CROSS JOIN (VALUES
     (N'Aguascalientes',N'AGS'),(N'Baja California',N'BC'),(N'Baja California Sur',N'BCS'),
     (N'Campeche',N'CAMP'),(N'Chiapas',N'CHIS'),(N'Chihuahua',N'CHIH'),
@@ -162,8 +162,8 @@ GO
 -- CORE TABLES
 -- ============================================================
 
--- Users (authentication identities)
-CREATE TABLE [app].[Users] (
+-- User (authentication identities)
+CREATE TABLE [dbo].[User] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     [Email]             NVARCHAR(256)    NULL,
     [NormalizedEmail]   NVARCHAR(256)    NULL,
@@ -183,16 +183,16 @@ CREATE TABLE [app].[Users] (
     CONSTRAINT [UQ_Users_GoogleSubject] UNIQUE ([GoogleSubjectId])
 );
 
-CREATE INDEX [IX_Users_NormalizedEmail] ON [app].[Users]([NormalizedEmail]);
-CREATE INDEX [IX_Users_NormalizedPhone] ON [app].[Users]([NormalizedPhone]);
+CREATE INDEX [IX_Users_NormalizedEmail] ON [dbo].[User]([NormalizedEmail]);
+CREATE INDEX [IX_Users_NormalizedPhone] ON [dbo].[User]([NormalizedPhone]);
 GO
 
--- Business Accounts (one per user initially)
-CREATE TABLE [app].[Accounts] (
+-- Business Account (one per user initially)
+CREATE TABLE [dbo].[Account] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [UserId]            UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Users]([Id]),
+    [UserId]            UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[User]([Id]),
     [BusinessName]      NVARCHAR(256)    NOT NULL,
-    [CategoryId]        TINYINT          NOT NULL REFERENCES [app].[BusinessCategories]([Id]),
+    [CategoryId]        TINYINT          NOT NULL REFERENCES [dbo].[BusinessCategory]([Id]),
     [BusinessPhone]     NVARCHAR(50)     NOT NULL,
     [PhoneCountryCode]  CHAR(2)          NOT NULL DEFAULT N'US',
     [Email]             NVARCHAR(256)    NOT NULL,
@@ -200,15 +200,15 @@ CREATE TABLE [app].[Accounts] (
     [WebsiteUrl]        NVARCHAR(500)    NULL,
     [BusinessHours]     NVARCHAR(500)    NULL,
     [ForwardingPhone]   NVARCHAR(50)     NULL,
-    [PlanId]            TINYINT          NOT NULL DEFAULT 2 REFERENCES [app].[Plans]([Id]),
+    [PlanId]            TINYINT          NOT NULL DEFAULT 2 REFERENCES [dbo].[Plan]([Id]),
     -- Address
     [AddressLine1]      NVARCHAR(256)    NULL,
     [AddressLine2]      NVARCHAR(256)    NULL,
     [City]              NVARCHAR(100)    NULL,
-    [RegionId]          SMALLINT         NULL REFERENCES [app].[Regions]([Id]),
+    [RegionId]          SMALLINT         NULL REFERENCES [dbo].[Region]([Id]),
     [RegionCustom]      NVARCHAR(100)    NULL,
     [PostalCode]        NVARCHAR(20)     NULL,
-    [CountryId]         SMALLINT         NOT NULL REFERENCES [app].[Countries]([Id]),
+    [CountryId]         SMALLINT         NOT NULL REFERENCES [dbo].[Country]([Id]),
     -- Billing
     [StripeCustomerId]  NVARCHAR(256)    NULL,
     [StripeSubscriptionId] NVARCHAR(256) NULL,
@@ -220,13 +220,13 @@ CREATE TABLE [app].[Accounts] (
     [UpdatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_Accounts_UserId] ON [app].[Accounts]([UserId]);
-CREATE INDEX [IX_Accounts_StripeCustomerId] ON [app].[Accounts]([StripeCustomerId]) WHERE [StripeCustomerId] IS NOT NULL;
+CREATE INDEX [IX_Accounts_UserId] ON [dbo].[Account]([UserId]);
+CREATE INDEX [IX_Accounts_StripeCustomerId] ON [dbo].[Account]([StripeCustomerId]) WHERE [StripeCustomerId] IS NOT NULL;
 GO
 
 -- Optional Feature Settings (Business plan only)
-CREATE TABLE [app].[FeatureSettings] (
-    [AccountId]         UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [app].[Accounts]([Id]),
+CREATE TABLE [dbo].[FeatureSetting] (
+    [AccountId]         UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Account]([Id]),
     [AnswerQuestions]   BIT              NOT NULL DEFAULT 0,
     [ServicesInfo]      NVARCHAR(MAX)    NULL,
     [ServeArea]         BIT              NOT NULL DEFAULT 0,
@@ -237,39 +237,39 @@ CREATE TABLE [app].[FeatureSettings] (
 );
 GO
 
--- Calls
-CREATE TABLE [app].[Calls] (
+-- Call
+CREATE TABLE [dbo].[Call] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [AccountId]         UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Accounts]([Id]),
+    [AccountId]         UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Account]([Id]),
     [CallerName]        NVARCHAR(256)    NULL,
     [CallerPhone]       NVARCHAR(50)     NOT NULL,
     [DateTimeUtc]       DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
     [DurationSeconds]   INT              NOT NULL DEFAULT 0,
-    [LanguageId]        TINYINT          NULL REFERENCES [app].[Languages]([Id]),
+    [LanguageId]        TINYINT          NULL REFERENCES [dbo].[Language]([Id]),
     [Summary]           NVARCHAR(MAX)    NULL,
     [Status]            NVARCHAR(20)     NOT NULL DEFAULT N'Missed', -- Answered, Completed, Missed, Failed
     [CreatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_Calls_AccountId_DateTime] ON [app].[Calls]([AccountId], [DateTimeUtc] DESC);
-CREATE INDEX [IX_Calls_AccountId_Status] ON [app].[Calls]([AccountId], [Status]);
+CREATE INDEX [IX_Calls_AccountId_DateTime] ON [dbo].[Call]([AccountId], [DateTimeUtc] DESC);
+CREATE INDEX [IX_Calls_AccountId_Status] ON [dbo].[Call]([AccountId], [Status]);
 GO
 
--- Collected Info from calls (key-value pairs)
-CREATE TABLE [app].[CallCollectedInfo] (
+-- Collected Info from Call (key-value pairs)
+CREATE TABLE [dbo].[CallCollectedInfo] (
     [Id]        BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
-    [CallId]    UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Calls]([Id]) ON DELETE CASCADE,
+    [CallId]    UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Call]([Id]) ON DELETE CASCADE,
     [Label]     NVARCHAR(100)    NOT NULL,
     [Value]     NVARCHAR(500)    NOT NULL
 );
 
-CREATE INDEX [IX_CallCollectedInfo_CallId] ON [app].[CallCollectedInfo]([CallId]);
+CREATE INDEX [IX_CallCollectedInfo_CallId] ON [dbo].[CallCollectedInfo]([CallId]);
 GO
 
--- Invoices
-CREATE TABLE [app].[Invoices] (
+-- Invoice
+CREATE TABLE [dbo].[Invoice] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [AccountId]         UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Accounts]([Id]),
+    [AccountId]         UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Account]([Id]),
     [StripeInvoiceId]   NVARCHAR(256)    NULL,
     [InvoiceNumber]     NVARCHAR(50)     NOT NULL,
     [DateUtc]           DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -280,13 +280,13 @@ CREATE TABLE [app].[Invoices] (
     [CreatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_Invoices_AccountId] ON [app].[Invoices]([AccountId], [DateUtc] DESC);
+CREATE INDEX [IX_Invoices_AccountId] ON [dbo].[Invoice]([AccountId], [DateUtc] DESC);
 GO
 
 -- Payment Methods
-CREATE TABLE [app].[PaymentMethods] (
+CREATE TABLE [dbo].[PaymentMethod] (
     [Id]                    UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [AccountId]             UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Accounts]([Id]),
+    [AccountId]             UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Account]([Id]),
     [StripePaymentMethodId] NVARCHAR(256)    NOT NULL,
     [Brand]                 NVARCHAR(50)     NOT NULL,   -- Visa, Mastercard, etc.
     [Last4]                 CHAR(4)          NOT NULL,
@@ -296,13 +296,13 @@ CREATE TABLE [app].[PaymentMethods] (
     [CreatedAt]             DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_PaymentMethods_AccountId] ON [app].[PaymentMethods]([AccountId]);
+CREATE INDEX [IX_PaymentMethods_AccountId] ON [dbo].[PaymentMethod]([AccountId]);
 GO
 
 -- Auth: Refresh Tokens
-CREATE TABLE [app].[RefreshTokens] (
+CREATE TABLE [dbo].[RefreshToken] (
     [Id]            BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
-    [UserId]        UNIQUEIDENTIFIER NOT NULL REFERENCES [app].[Users]([Id]) ON DELETE CASCADE,
+    [UserId]        UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[User]([Id]) ON DELETE CASCADE,
     [Token]         NVARCHAR(256)    NOT NULL UNIQUE,
     [ExpiresAt]     DATETIME2(7)     NOT NULL,
     [CreatedAt]     DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -311,12 +311,12 @@ CREATE TABLE [app].[RefreshTokens] (
     [IsRevoked] AS (CASE WHEN [RevokedAt] IS NOT NULL THEN 1 ELSE 0 END)
 );
 
-CREATE INDEX [IX_RefreshTokens_Token] ON [app].[RefreshTokens]([Token]);
-CREATE INDEX [IX_RefreshTokens_UserId] ON [app].[RefreshTokens]([UserId]);
+CREATE INDEX [IX_RefreshTokens_Token] ON [dbo].[RefreshToken]([Token]);
+CREATE INDEX [IX_RefreshTokens_UserId] ON [dbo].[RefreshToken]([UserId]);
 GO
 
 -- Auth: OTP codes (magic links, SMS verification)
-CREATE TABLE [app].[OtpCodes] (
+CREATE TABLE [dbo].[OtpCode] (
     [Id]            BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
     [Identifier]    NVARCHAR(256)    NOT NULL,  -- email or phone
     [Code]          NVARCHAR(10)     NOT NULL,
@@ -327,11 +327,11 @@ CREATE TABLE [app].[OtpCodes] (
     [Attempts]      INT              NOT NULL DEFAULT 0
 );
 
-CREATE INDEX [IX_OtpCodes_Identifier_Type] ON [app].[OtpCodes]([Identifier], [Type]) WHERE [IsUsed] = 0;
+CREATE INDEX [IX_OtpCodes_Identifier_Type] ON [dbo].[OtpCode]([Identifier], [Type]) WHERE [IsUsed] = 0;
 GO
 
 -- Contact Form Submissions
-CREATE TABLE [app].[ContactSubmissions] (
+CREATE TABLE [dbo].[ContactSubmission] (
     [Id]            BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
     [Name]          NVARCHAR(256)    NOT NULL,
     [Email]         NVARCHAR(256)    NOT NULL,
@@ -341,32 +341,32 @@ CREATE TABLE [app].[ContactSubmissions] (
     [CreatedAt]     DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_ContactSubmissions_CreatedAt] ON [app].[ContactSubmissions]([CreatedAt] DESC);
+CREATE INDEX [IX_ContactSubmissions_CreatedAt] ON [dbo].[ContactSubmission]([CreatedAt] DESC);
 GO
 
 -- ============================================================
 -- TRIGGER: Auto-update UpdatedAt
 -- ============================================================
-CREATE OR ALTER TRIGGER [app].[TR_Users_UpdatedAt]
-ON [app].[Users]
+CREATE OR ALTER TRIGGER [dbo].[TR_User_UpdatedAt]
+ON [dbo].[User]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE u SET [UpdatedAt] = SYSUTCDATETIME()
-    FROM [app].[Users] u
+    FROM [dbo].[User] u
     INNER JOIN inserted i ON u.[Id] = i.[Id];
 END;
 GO
 
-CREATE OR ALTER TRIGGER [app].[TR_Accounts_UpdatedAt]
-ON [app].[Accounts]
+CREATE OR ALTER TRIGGER [dbo].[TR_Account_UpdatedAt]
+ON [dbo].[Account]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE a SET [UpdatedAt] = SYSUTCDATETIME()
-    FROM [app].[Accounts] a
+    FROM [dbo].[Account] a
     INNER JOIN inserted i ON a.[Id] = i.[Id];
 END;
 GO
