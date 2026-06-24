@@ -1,6 +1,6 @@
 namespace Gigahoo.Api.Entities;
 
-public class Call
+public class Conversation
 {
     public Guid Id { get; set; }
     public Guid AccountId { get; set; }
@@ -15,5 +15,4 @@ public class Call
 
     public Account Account { get; set; } = null!;
     public Language? Language { get; set; }
-    public ICollection<CallCollectedInfo> CollectedInfo { get; set; } = [];
 }

@@ -1,6 +1,6 @@
 namespace Gigahoo.Api.Dtos;
 
-public record CallResponse(
+public record ConversationResponse(
     Guid Id,
     string? CallerName,
     string CallerPhone,
@@ -8,14 +8,11 @@ public record CallResponse(
     int DurationSeconds,
     string Language,
     string? Summary,
-    string Status,
-    List<CollectedInfoDto> CollectedInfo
+    string Status
 );
 
-public record CollectedInfoDto(string Label, string Value);
-
-public record CallsPageResponse(
-    List<CallResponse> Items,
+public record ConversationsPageResponse(
+    List<ConversationResponse> Items,
     int TotalCount,
     int Page,
     int PageSize

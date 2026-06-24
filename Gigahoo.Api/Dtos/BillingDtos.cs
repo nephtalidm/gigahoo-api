@@ -29,12 +29,3 @@ public record InvoiceResponse(
     string Status,
     string? PdfUrl
 );
-
-public record PaymentMethodResponse(
-    Guid Id,
-    string Brand,
-    string Last4,
-    byte ExpMonth,
-    short ExpYear,
-    bool IsDefault
-);

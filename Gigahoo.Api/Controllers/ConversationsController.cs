@@ -10,12 +10,12 @@ namespace Gigahoo.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [EnableRateLimiting("api")]
-public class CallsController(GigahooDbContext db) : ControllerBase
+public class ConversationsController(GigahooDbContext db) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
     [HttpGet]
-    public async Task<ActionResult<CallsPageResponse>> GetCalls(
+    public async Task<ActionResult<ConversationsPageResponse>> GetConversations(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? status = null)
@@ -25,9 +25,8 @@ public class CallsController(GigahooDbContext db) : ControllerBase
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = db.Calls
+        var query = db.Conversations
             .Include(c => c.Language)
-            .Include(c => c.CollectedInfo)
             .Where(c => c.AccountId == accountId);
 
         if (!string.IsNullOrEmpty(status))
@@ -35,11 +34,11 @@ public class CallsController(GigahooDbContext db) : ControllerBase
 
         var totalCount = await query.CountAsync();
 
-        var calls = await query
+        var conversations = await query
             .OrderByDescending(c => c.DateTimeUtc)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(c => new CallResponse(
+            .Select(c => new ConversationResponse(
                 c.Id,
                 c.CallerName,
                 c.CallerPhone,
@@ -47,36 +46,33 @@ public class CallsController(GigahooDbContext db) : ControllerBase
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
-                c.Status,
-                c.CollectedInfo.Select(ci => new CollectedInfoDto(ci.Label, ci.Value)).ToList()
+                c.Status
             ))
             .ToListAsync();
 
-        return Ok(new CallsPageResponse(calls, totalCount, page, pageSize));
+        return Ok(new ConversationsPageResponse(conversations, totalCount, page, pageSize));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<CallResponse>> GetCall(Guid id)
+    public async Task<ActionResult<ConversationResponse>> GetConversation(Guid id)
     {
         var accountId = GetAccountId();
 
-        var call = await db.Calls
+        var conversation = await db.Conversations
             .Include(c => c.Language)
-            .Include(c => c.CollectedInfo)
             .FirstOrDefaultAsync(c => c.Id == id && c.AccountId == accountId);
 
-        if (call is null) return NotFound();
+        if (conversation is null) return NotFound();
 
-        return Ok(new CallResponse(
-            call.Id,
-            call.CallerName,
-            call.CallerPhone,
-            call.DateTimeUtc,
-            call.DurationSeconds,
-            call.Language?.Name ?? "English",
-            call.Summary,
-            call.Status,
-            call.CollectedInfo.Select(ci => new CollectedInfoDto(ci.Label, ci.Value)).ToList()
+        return Ok(new ConversationResponse(
+            conversation.Id,
+            conversation.CallerName,
+            conversation.CallerPhone,
+            conversation.DateTimeUtc,
+            conversation.DurationSeconds,
+            conversation.Language?.Name ?? "English",
+            conversation.Summary,
+            conversation.Status
         ));
     }
 }

@@ -3,12 +3,24 @@ namespace Gigahoo.Api.Entities;
 public class Account
 {
     public Guid Id { get; set; }
-    public Guid UserId { get; set; }
-    public string BusinessName { get; set; } = null!;
-    public byte CategoryId { get; set; }
-    public string BusinessPhone { get; set; } = null!;
+
+    // Auth identity (merged from User)
+    public string? Email { get; set; }
+    public string? NormalizedEmail { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? NormalizedPhone { get; set; }
+    public string? GoogleSubjectId { get; set; }
+    public string? PasswordHash { get; set; }
+    public string? DisplayName { get; set; }
+    public bool IsEmailConfirmed { get; set; }
+    public bool IsPhoneConfirmed { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+
+    // Business profile
+    public string? BusinessName { get; set; }
+    public byte? CategoryId { get; set; }
+    public string? BusinessPhone { get; set; }
     public string PhoneCountryCode { get; set; } = "US";
-    public string Email { get; set; } = null!;
     public string? ServiceArea { get; set; }
     public string? WebsiteUrl { get; set; }
     public string? BusinessHours { get; set; }
@@ -21,7 +33,7 @@ public class Account
     public short? RegionId { get; set; }
     public string? RegionCustom { get; set; }
     public string? PostalCode { get; set; }
-    public short CountryId { get; set; }
+    public short? CountryCodeId { get; set; }
 
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
@@ -31,16 +43,28 @@ public class Account
     public DateOnly? BillingPeriodEnd { get; set; }
     public int MinutesUsed { get; set; }
 
+    // Feature settings (Business plan only)
+    public bool AnswerQuestions { get; set; }
+    public string? ServicesInfo { get; set; }
+    public string? FeatureServiceAreas { get; set; }
+    public string? FeatureBusinessHours { get; set; }
+    public string? EmergencyAvailability { get; set; }
+    public string? PricingPolicy { get; set; }
+    public string? WarrantyPolicy { get; set; }
+    public string? FrequentlyAskedQuestions { get; set; }
+    public string? AdditionalBusinessInfo { get; set; }
+    public bool ServeArea { get; set; }
+    public int DistanceKm { get; set; } = 50;
+    public bool QuoteInspection { get; set; }
+    public decimal PricePerKm { get; set; }
+    public DateTime FeatureUpdatedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    public User User { get; set; } = null!;
     public Plan Plan { get; set; } = null!;
-    public BusinessCategory Category { get; set; } = null!;
-    public Country Country { get; set; } = null!;
+    public BusinessCategory? Category { get; set; }
     public Region? Region { get; set; }
-    public FeatureSettings? FeatureSettings { get; set; }
-    public ICollection<Call> Calls { get; set; } = [];
+    public ICollection<Conversation> Conversations { get; set; } = [];
     public ICollection<Invoice> Invoices { get; set; } = [];
-    public ICollection<PaymentMethod> PaymentMethods { get; set; } = [];
 }

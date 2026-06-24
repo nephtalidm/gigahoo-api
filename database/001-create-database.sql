@@ -162,45 +162,32 @@ GO
 -- CORE TABLES
 -- ============================================================
 
--- User (authentication identities)
-CREATE TABLE [dbo].[User] (
+-- Account (single table: auth identity + business profile + feature settings)
+CREATE TABLE [dbo].[Account] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
+
+    -- Auth identity
     [Email]             NVARCHAR(256)    NULL,
     [NormalizedEmail]   NVARCHAR(256)    NULL,
     [PhoneNumber]       NVARCHAR(50)     NULL,
     [NormalizedPhone]   NVARCHAR(50)     NULL,
-    [PasswordHash]      NVARCHAR(MAX)    NULL,
     [GoogleSubjectId]   NVARCHAR(256)    NULL,
     [DisplayName]       NVARCHAR(256)    NULL,
     [IsEmailConfirmed]  BIT              NOT NULL DEFAULT 0,
     [IsPhoneConfirmed]  BIT              NOT NULL DEFAULT 0,
-    [CreatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
-    [UpdatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
     [LastLoginAt]       DATETIME2(7)     NULL,
-    [IsDisabled]        BIT              NOT NULL DEFAULT 0,
-    CONSTRAINT [UQ_Users_Email] UNIQUE ([NormalizedEmail]),
-    CONSTRAINT [UQ_Users_Phone] UNIQUE ([NormalizedPhone]),
-    CONSTRAINT [UQ_Users_GoogleSubject] UNIQUE ([GoogleSubjectId])
-);
 
-CREATE INDEX [IX_Users_NormalizedEmail] ON [dbo].[User]([NormalizedEmail]);
-CREATE INDEX [IX_Users_NormalizedPhone] ON [dbo].[User]([NormalizedPhone]);
-GO
-
--- Business Account (one per user initially)
-CREATE TABLE [dbo].[Account] (
-    [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [UserId]            UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[User]([Id]),
+    -- Business profile
     [BusinessName]      NVARCHAR(256)    NOT NULL,
     [CategoryId]        TINYINT          NOT NULL REFERENCES [dbo].[BusinessCategory]([Id]),
     [BusinessPhone]     NVARCHAR(50)     NOT NULL,
     [PhoneCountryCode]  CHAR(2)          NOT NULL DEFAULT N'US',
-    [Email]             NVARCHAR(256)    NOT NULL,
     [ServiceArea]       NVARCHAR(500)    NULL,
     [WebsiteUrl]        NVARCHAR(500)    NULL,
     [BusinessHours]     NVARCHAR(500)    NULL,
     [ForwardingPhone]   NVARCHAR(50)     NULL,
     [PlanId]            TINYINT          NOT NULL DEFAULT 2 REFERENCES [dbo].[Plan]([Id]),
+
     -- Address
     [AddressLine1]      NVARCHAR(256)    NULL,
     [AddressLine2]      NVARCHAR(256)    NULL,
@@ -209,36 +196,45 @@ CREATE TABLE [dbo].[Account] (
     [RegionCustom]      NVARCHAR(100)    NULL,
     [PostalCode]        NVARCHAR(20)     NULL,
     [CountryId]         SMALLINT         NOT NULL REFERENCES [dbo].[Country]([Id]),
+
     -- Billing
     [StripeCustomerId]  NVARCHAR(256)    NULL,
     [StripeSubscriptionId] NVARCHAR(256) NULL,
+    [PhoneNumberSid]    NVARCHAR(100)    NULL,
+    [TelephonyProvider] NVARCHAR(50)     NULL,
     [BillingPeriodStart] DATE            NULL,
     [BillingPeriodEnd]   DATE            NULL,
     [MinutesUsed]       INT              NOT NULL DEFAULT 0,
+
+    -- Feature settings (Business plan only)
+    [AnswerQuestions]       BIT           NOT NULL DEFAULT 0,
+    [ServicesInfo]          NVARCHAR(2000) NULL,
+    [FeatureServiceAreas]   NVARCHAR(500)  NULL,
+    [FeatureBusinessHours]  NVARCHAR(500)  NULL,
+    [EmergencyAvailability] NVARCHAR(500)  NULL,
+    [PricingPolicy]         NVARCHAR(2000) NULL,
+    [WarrantyPolicy]        NVARCHAR(2000) NULL,
+    [FrequentlyAskedQuestions] NVARCHAR(MAX) NULL,
+    [AdditionalBusinessInfo] NVARCHAR(2000) NULL,
+    [ServeArea]         BIT              NOT NULL DEFAULT 0,
+    [DistanceKm]        INT              NOT NULL DEFAULT 50,
+    [QuoteInspection]   BIT              NOT NULL DEFAULT 0,
+    [PricePerKm]        DECIMAL(10,2)    NOT NULL DEFAULT 0,
+    [FeatureUpdatedAt]  DATETIME2(7)     NULL,
+
     -- Timestamps
     [CreatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
     [UpdatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_Accounts_UserId] ON [dbo].[Account]([UserId]);
-CREATE INDEX [IX_Accounts_StripeCustomerId] ON [dbo].[Account]([StripeCustomerId]) WHERE [StripeCustomerId] IS NOT NULL;
+CREATE UNIQUE INDEX [IX_Account_NormalizedEmail] ON [dbo].[Account]([NormalizedEmail]) WHERE [NormalizedEmail] IS NOT NULL;
+CREATE UNIQUE INDEX [IX_Account_NormalizedPhone] ON [dbo].[Account]([NormalizedPhone]) WHERE [NormalizedPhone] IS NOT NULL;
+CREATE UNIQUE INDEX [IX_Account_GoogleSubjectId] ON [dbo].[Account]([GoogleSubjectId]) WHERE [GoogleSubjectId] IS NOT NULL;
+CREATE INDEX [IX_Account_StripeCustomerId] ON [dbo].[Account]([StripeCustomerId]) WHERE [StripeCustomerId] IS NOT NULL;
 GO
 
--- Optional Feature Settings (Business plan only)
-CREATE TABLE [dbo].[FeatureSetting] (
-    [AccountId]         UNIQUEIDENTIFIER NOT NULL PRIMARY KEY REFERENCES [dbo].[Account]([Id]),
-    [AnswerQuestions]   BIT              NOT NULL DEFAULT 0,
-    [ServicesInfo]      NVARCHAR(MAX)    NULL,
-    [ServeArea]         BIT              NOT NULL DEFAULT 0,
-    [DistanceKm]        INT              NOT NULL DEFAULT 50,
-    [QuoteInspection]   BIT              NOT NULL DEFAULT 0,
-    [PricePerKm]        DECIMAL(10,2)    NOT NULL DEFAULT 0,
-    [UpdatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
-);
-GO
-
--- Call
-CREATE TABLE [dbo].[Call] (
+-- Conversation (renamed from Call)
+CREATE TABLE [dbo].[Conversation] (
     [Id]                UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     [AccountId]         UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Account]([Id]),
     [CallerName]        NVARCHAR(256)    NULL,
@@ -247,23 +243,12 @@ CREATE TABLE [dbo].[Call] (
     [DurationSeconds]   INT              NOT NULL DEFAULT 0,
     [LanguageId]        TINYINT          NULL REFERENCES [dbo].[Language]([Id]),
     [Summary]           NVARCHAR(MAX)    NULL,
-    [Status]            NVARCHAR(20)     NOT NULL DEFAULT N'Missed', -- Answered, Completed, Missed, Failed
+    [Status]            NVARCHAR(20)     NOT NULL DEFAULT N'Missed',
     [CreatedAt]         DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
-CREATE INDEX [IX_Calls_AccountId_DateTime] ON [dbo].[Call]([AccountId], [DateTimeUtc] DESC);
-CREATE INDEX [IX_Calls_AccountId_Status] ON [dbo].[Call]([AccountId], [Status]);
-GO
-
--- Collected Info from Call (key-value pairs)
-CREATE TABLE [dbo].[CallCollectedInfo] (
-    [Id]        BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
-    [CallId]    UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Call]([Id]) ON DELETE CASCADE,
-    [Label]     NVARCHAR(100)    NOT NULL,
-    [Value]     NVARCHAR(500)    NOT NULL
-);
-
-CREATE INDEX [IX_CallCollectedInfo_CallId] ON [dbo].[CallCollectedInfo]([CallId]);
+CREATE INDEX [IX_Conversations_AccountId_DateTime] ON [dbo].[Conversation]([AccountId], [DateTimeUtc] DESC);
+CREATE INDEX [IX_Conversations_AccountId_Status] ON [dbo].[Conversation]([AccountId], [Status]);
 GO
 
 -- Invoice
@@ -281,38 +266,6 @@ CREATE TABLE [dbo].[Invoice] (
 );
 
 CREATE INDEX [IX_Invoices_AccountId] ON [dbo].[Invoice]([AccountId], [DateUtc] DESC);
-GO
-
--- Payment Methods
-CREATE TABLE [dbo].[PaymentMethod] (
-    [Id]                    UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
-    [AccountId]             UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[Account]([Id]),
-    [StripePaymentMethodId] NVARCHAR(256)    NOT NULL,
-    [Brand]                 NVARCHAR(50)     NOT NULL,   -- Visa, Mastercard, etc.
-    [Last4]                 CHAR(4)          NOT NULL,
-    [ExpMonth]              TINYINT          NOT NULL,
-    [ExpYear]               SMALLINT         NOT NULL,
-    [IsDefault]             BIT              NOT NULL DEFAULT 0,
-    [CreatedAt]             DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME()
-);
-
-CREATE INDEX [IX_PaymentMethods_AccountId] ON [dbo].[PaymentMethod]([AccountId]);
-GO
-
--- Auth: Refresh Tokens
-CREATE TABLE [dbo].[RefreshToken] (
-    [Id]            BIGINT           NOT NULL PRIMARY KEY IDENTITY(1,1),
-    [UserId]        UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[User]([Id]) ON DELETE CASCADE,
-    [Token]         NVARCHAR(256)    NOT NULL UNIQUE,
-    [ExpiresAt]     DATETIME2(7)     NOT NULL,
-    [CreatedAt]     DATETIME2(7)     NOT NULL DEFAULT SYSUTCDATETIME(),
-    [RevokedAt]     DATETIME2(7)     NULL,
-    [ReplacedByToken] NVARCHAR(256)  NULL,
-    [IsRevoked] AS (CASE WHEN [RevokedAt] IS NOT NULL THEN 1 ELSE 0 END)
-);
-
-CREATE INDEX [IX_RefreshTokens_Token] ON [dbo].[RefreshToken]([Token]);
-CREATE INDEX [IX_RefreshTokens_UserId] ON [dbo].[RefreshToken]([UserId]);
 GO
 
 -- Auth: OTP codes (magic links, SMS verification)
@@ -347,18 +300,6 @@ GO
 -- ============================================================
 -- TRIGGER: Auto-update UpdatedAt
 -- ============================================================
-CREATE OR ALTER TRIGGER [dbo].[TR_User_UpdatedAt]
-ON [dbo].[User]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE u SET [UpdatedAt] = SYSUTCDATETIME()
-    FROM [dbo].[User] u
-    INNER JOIN inserted i ON u.[Id] = i.[Id];
-END;
-GO
-
 CREATE OR ALTER TRIGGER [dbo].[TR_Account_UpdatedAt]
 ON [dbo].[Account]
 AFTER UPDATE

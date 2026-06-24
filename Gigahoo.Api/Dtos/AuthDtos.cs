@@ -31,21 +31,8 @@ public record GoogleAuthRequest
 
 public record AuthResponse(
     string AccessToken,
-    string RefreshToken,
     DateTime ExpiresAt,
     bool IsNewUser
-);
-
-public record TokenRefreshRequest
-{
-    [Required, MaxLength(512)]
-    public string RefreshToken { get; init; } = default!;
-}
-
-public record TokenRefreshResponse(
-    string AccessToken,
-    string RefreshToken,
-    DateTime ExpiresAt
 );
 
 public record VerifyMagicLinkRequest
@@ -55,4 +42,13 @@ public record VerifyMagicLinkRequest
 
     [Required, MaxLength(64)]
     public string Code { get; init; } = default!;
+}
+
+public record LoginPasswordRequest
+{
+    [Required, EmailAddress, MaxLength(254)]
+    public string Email { get; init; } = default!;
+
+    [Required, MaxLength(128)]
+    public string Password { get; init; } = default!;
 }

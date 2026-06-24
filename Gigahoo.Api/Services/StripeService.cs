@@ -6,6 +6,7 @@ public interface IStripeService
 {
     Task<string> CreateCustomerAsync(string email, string businessName);
     Task<string> CreateSubscriptionAsync(string customerId, string priceId);
+    Task<string> CreateCheckoutSessionAsync(string customerId, string priceId, string successUrl, string cancelUrl);
     Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl);
     Task CancelSubscriptionAsync(string subscriptionId);
     Task<Subscription> GetSubscriptionAsync(string subscriptionId);
@@ -43,6 +44,26 @@ public class StripeService(IConfiguration config) : IStripeService
         var service = new SubscriptionService();
         var subscription = service.Create(options);
         return Task.FromResult(subscription.Id);
+    }
+
+    public Task<string> CreateCheckoutSessionAsync(string customerId, string priceId, string successUrl, string cancelUrl)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+
+        var options = new Stripe.Checkout.SessionCreateOptions
+        {
+            Customer = customerId,
+            Mode = "subscription",
+            PaymentMethodTypes = ["card"],
+            LineItems = [new Stripe.Checkout.SessionLineItemOptions { Price = priceId, Quantity = 1 }],
+            SuccessUrl = successUrl,
+            CancelUrl = cancelUrl,
+            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions { Metadata = { { "priceId", priceId } } },
+        };
+
+        var service = new Stripe.Checkout.SessionService();
+        var session = service.Create(options);
+        return Task.FromResult(session.Url);
     }
 
     public Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl)

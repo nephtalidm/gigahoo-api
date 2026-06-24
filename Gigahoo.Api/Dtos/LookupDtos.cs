@@ -14,7 +14,7 @@ public record DashboardOverviewResponse(
     int MinutesUsed,
     int RemainingMinutes,
     string BillingPeriod,
-    int CallsAnswered,
-    double AvgCallDurationSeconds,
-    List<CallResponse> RecentCalls
+    int ConversationsAnswered,
+    double AvgConversationDurationSeconds,
+    List<ConversationResponse> RecentConversations
 );

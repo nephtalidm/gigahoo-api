@@ -11,36 +11,36 @@ namespace Gigahoo.Api.Controllers;
 [Authorize]
 public class AccountSecurityController(GigahooDbContext db) : ControllerBase
 {
-    private Guid GetUserId() => Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+    private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
     [HttpGet("linked-accounts")]
     public async Task<ActionResult<LinkedAccountsResponse>> GetLinkedAccounts()
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
+
+        if (account is null) return NotFound();
 
         return Ok(new LinkedAccountsResponse(
-            user.GoogleSubjectId != null,
-            user.Email,
-            user.NormalizedPhone
+            account.GoogleSubjectId != null,
+            account.Email,
+            account.PhoneNumber
         ));
     }
 
     [HttpPost("link-google")]
     public async Task<IActionResult> LinkGoogle([FromBody] LinkGoogleRequest request)
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
 
-        if (user.GoogleSubjectId != null)
+        if (account is null) return NotFound();
+
+        if (account.GoogleSubjectId != null)
             return BadRequest(new { error = "Google account already linked" });
 
-        user.GoogleSubjectId = request.GoogleSubjectId;
-        user.UpdatedAt = DateTime.UtcNow;
+        account.GoogleSubjectId = request.GoogleSubjectId;
+        account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Google account linked successfully" });
@@ -49,20 +49,19 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
     [HttpPost("unlink-google")]
     public async Task<IActionResult> UnlinkGoogle()
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
 
-        if (user.GoogleSubjectId == null)
+        if (account is null) return NotFound();
+
+        if (account.GoogleSubjectId == null)
             return BadRequest(new { error = "No Google account linked" });
 
-        // Ensure user has at least one other login method
-        if (user.NormalizedPhone == null)
+        if (account.NormalizedPhone == null)
             return BadRequest(new { error = "Cannot unlink Google: no other login method available" });
 
-        user.GoogleSubjectId = null;
-        user.UpdatedAt = DateTime.UtcNow;
+        account.GoogleSubjectId = null;
+        account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Google account unlinked successfully" });
@@ -71,20 +70,19 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
     [HttpPost("change-email")]
     public async Task<IActionResult> ChangeEmail([FromBody] ChangeEmailRequest request)
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
 
-        // Check if email is already in use
-        var existingUser = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == request.NewEmail.ToLowerInvariant() && u.Id != userId);
-        if (existingUser != null)
+        if (account is null) return NotFound();
+
+        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.NewEmail.ToLowerInvariant() && a.Id != accountId);
+        if (existing != null)
             return BadRequest(new { error = "Email already in use" });
 
-        user.Email = request.NewEmail;
-        user.NormalizedEmail = request.NewEmail.ToLowerInvariant();
-        user.IsEmailConfirmed = false;
-        user.UpdatedAt = DateTime.UtcNow;
+        account.Email = request.NewEmail;
+        account.NormalizedEmail = request.NewEmail.ToLowerInvariant();
+        account.IsEmailConfirmed = false;
+        account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Email changed successfully. Please verify your new email." });
@@ -93,20 +91,19 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
     [HttpPost("change-phone")]
     public async Task<IActionResult> ChangePhone([FromBody] ChangePhoneRequest request)
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
 
-        // Check if phone is already in use
-        var existingUser = await db.Users.FirstOrDefaultAsync(u => u.NormalizedPhone == request.NewPhone && u.Id != userId);
-        if (existingUser != null)
+        if (account is null) return NotFound();
+
+        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == request.NewPhone && a.Id != accountId);
+        if (existing != null)
             return BadRequest(new { error = "Phone number already in use" });
 
-        user.PhoneNumber = request.NewPhone;
-        user.NormalizedPhone = request.NewPhone;
-        user.IsPhoneConfirmed = false;
-        user.UpdatedAt = DateTime.UtcNow;
+        account.PhoneNumber = request.NewPhone;
+        account.NormalizedPhone = request.NewPhone;
+        account.IsPhoneConfirmed = false;
+        account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Phone number changed successfully. Please verify your new phone number." });
@@ -115,13 +112,11 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
     [HttpPost("set-primary")]
     public async Task<IActionResult> SetPrimaryLoginMethod([FromBody] SetPrimaryRequest request)
     {
-        var userId = GetUserId();
-        var user = await db.Users.FindAsync(userId);
-        
-        if (user is null) return NotFound();
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FindAsync(accountId);
 
-        // For now, we don't have a primary login method field
-        // This is a placeholder for future implementation
+        if (account is null) return NotFound();
+
         return Ok(new { message = $"Primary login method set to {request.Method}" });
     }
 }

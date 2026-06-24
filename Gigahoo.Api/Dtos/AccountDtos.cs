@@ -21,6 +21,9 @@ public record CreateAccountRequest
 
     [Required]
     public byte PlanId { get; init; }
+
+    [Required, MinLength(8), MaxLength(128)]
+    public string Password { get; init; } = default!;
 }
 
 public record UpdateAccountRequest

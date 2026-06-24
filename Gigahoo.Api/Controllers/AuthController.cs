@@ -17,6 +17,7 @@ public class AuthController(
     IOtpService otp,
     IEmailService email,
     ISmsService sms,
+    IConfiguration config,
     ILogger<AuthController> logger) : ControllerBase
 {
     [HttpPost("google")]
@@ -25,12 +26,12 @@ public class AuthController(
         var payload = await googleAuth.ValidateIdTokenAsync(request.IdToken);
         if (payload is null) return Unauthorized(new { error = "Invalid Google token" });
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.GoogleSubjectId == payload.Subject);
-        var isNew = user is null;
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.GoogleSubjectId == payload.Subject);
+        var isNew = account is null;
 
         if (isNew)
         {
-            user = new User
+            account = new Account
             {
                 Email = payload.Email,
                 NormalizedEmail = payload.Email.ToLowerInvariant(),
@@ -41,43 +42,60 @@ public class AuthController(
                 UpdatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow,
             };
-            db.Users.Add(user);
+            db.Accounts.Add(account);
         }
         else
         {
-            user.LastLoginAt = DateTime.UtcNow;
+            account.LastLoginAt = DateTime.UtcNow;
         }
 
         await db.SaveChangesAsync();
 
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.UserId == user.Id);
-        var accountId = account?.Id ?? Guid.Empty;
+        var accessToken = jwt.GenerateAccessToken(account);
+        var expiresAt = DateTime.UtcNow.AddDays(7);
 
-        var accessToken = jwt.GenerateAccessToken(user, accountId);
-        var refreshToken = jwt.GenerateRefreshToken();
-
-        db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            CreatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
-
-        return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(30), isNew));
+        return Ok(new AuthResponse(accessToken, expiresAt, isNew));
     }
 
     [HttpPost("magic-link")]
     public async Task<IActionResult> SendMagicLink([FromBody] SendMagicLinkRequest request)
     {
         var code = await otp.GenerateAndStoreAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(15));
-        var link = $"{Request.Scheme}://{Request.Host}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
+        var frontendUrl = config["Frontend:Url"] ?? "http://localhost:3000";
+        var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
 
         await email.SendMagicLinkAsync(request.Email, link);
         logger.LogInformation("Magic link sent to {Email}", request.Email);
 
         return Ok(new { message = "If an account exists, a magic link has been sent." });
+    }
+
+    [HttpPost("check-email")]
+    public async Task<ActionResult> CheckEmail([FromBody] SendMagicLinkRequest request)
+    {
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        if (account is null)
+            return Ok(new { exists = false });
+        return Ok(new { exists = true, hasPassword = !string.IsNullOrEmpty(account.PasswordHash) });
+    }
+
+    [HttpPost("login-password")]
+    public async Task<ActionResult<AuthResponse>> LoginPassword([FromBody] LoginPasswordRequest request)
+    {
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        if (account is null || string.IsNullOrEmpty(account.PasswordHash))
+            return Unauthorized(new { error = "Invalid email or password" });
+
+        if (!BCrypt.Net.BCrypt.Verify(request.Password, account.PasswordHash))
+            return Unauthorized(new { error = "Invalid email or password" });
+
+        account.LastLoginAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        var accessToken = jwt.GenerateAccessToken(account);
+        var expiresAt = DateTime.UtcNow.AddDays(7);
+
+        return Ok(new AuthResponse(accessToken, expiresAt, false));
     }
 
     [HttpPost("verify-magic-link")]
@@ -86,12 +104,16 @@ public class AuthController(
         var valid = await otp.VerifyAsync(request.Email, "EmailMagicLink", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired link" });
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == request.Email.ToLowerInvariant());
-        var isNew = user is null;
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+
+        if (account is not null && account.IsEmailConfirmed)
+            return BadRequest(new { error = "Email already verified. Please sign in instead." });
+
+        var isNew = account is null;
 
         if (isNew)
         {
-            user = new User
+            account = new Account
             {
                 Email = request.Email,
                 NormalizedEmail = request.Email.ToLowerInvariant(),
@@ -100,32 +122,20 @@ public class AuthController(
                 UpdatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow,
             };
-            db.Users.Add(user);
+            db.Accounts.Add(account);
         }
         else
         {
-            user.LastLoginAt = DateTime.UtcNow;
-            user.IsEmailConfirmed = true;
+            account.IsEmailConfirmed = true;
+            account.LastLoginAt = DateTime.UtcNow;
         }
 
         await db.SaveChangesAsync();
 
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.UserId == user.Id);
-        var accountId = account?.Id ?? Guid.Empty;
+        var accessToken = jwt.GenerateAccessToken(account);
+        var expiresAt = DateTime.UtcNow.AddDays(7);
 
-        var accessToken = jwt.GenerateAccessToken(user, accountId);
-        var refreshToken = jwt.GenerateRefreshToken();
-
-        db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            CreatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
-
-        return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(30), isNew));
+        return Ok(new AuthResponse(accessToken, expiresAt, isNew));
     }
 
     [HttpPost("sms/send")]
@@ -145,12 +155,12 @@ public class AuthController(
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
-        var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedPhone == normalizedPhone);
-        var isNew = user is null;
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == normalizedPhone);
+        var isNew = account is null;
 
         if (isNew)
         {
-            user = new User
+            account = new Account
             {
                 PhoneNumber = request.PhoneNumber,
                 NormalizedPhone = normalizedPhone,
@@ -159,82 +169,19 @@ public class AuthController(
                 UpdatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow,
             };
-            db.Users.Add(user);
+            db.Accounts.Add(account);
         }
         else
         {
-            user.LastLoginAt = DateTime.UtcNow;
-            user.IsPhoneConfirmed = true;
+            account.LastLoginAt = DateTime.UtcNow;
+            account.IsPhoneConfirmed = true;
         }
 
         await db.SaveChangesAsync();
 
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.UserId == user.Id);
-        var accountId = account?.Id ?? Guid.Empty;
+        var accessToken = jwt.GenerateAccessToken(account);
+        var expiresAt = DateTime.UtcNow.AddDays(7);
 
-        var accessToken = jwt.GenerateAccessToken(user, accountId);
-        var refreshToken = jwt.GenerateRefreshToken();
-
-        db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = user.Id,
-            Token = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            CreatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
-
-        return Ok(new AuthResponse(accessToken, refreshToken, DateTime.UtcNow.AddMinutes(30), isNew));
-    }
-
-    [HttpPost("refresh")]
-    public async Task<ActionResult<TokenRefreshResponse>> Refresh([FromBody] TokenRefreshRequest request)
-    {
-        var storedToken = await db.RefreshTokens
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Token == request.RefreshToken && !t.IsRevoked && t.ExpiresAt > DateTime.UtcNow);
-
-        if (storedToken is null) return Unauthorized(new { error = "Invalid refresh token" });
-
-        storedToken.RevokedAt = DateTime.UtcNow;
-
-        var newRefreshToken = jwt.GenerateRefreshToken();
-        storedToken.ReplacedByToken = newRefreshToken;
-
-        db.RefreshTokens.Add(new RefreshToken
-        {
-            UserId = storedToken.UserId,
-            Token = newRefreshToken,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
-            CreatedAt = DateTime.UtcNow,
-        });
-
-        await db.SaveChangesAsync();
-
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.UserId == storedToken.UserId);
-        var accountId = account?.Id ?? Guid.Empty;
-
-        var accessToken = jwt.GenerateAccessToken(storedToken.User, accountId);
-
-        return Ok(new TokenRefreshResponse(accessToken, newRefreshToken, DateTime.UtcNow.AddMinutes(30)));
-    }
-
-    [HttpPost("revoke")]
-    [Authorize]
-    public async Task<IActionResult> Revoke([FromBody] TokenRefreshRequest request)
-    {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId is null) return Unauthorized();
-
-        var token = await db.RefreshTokens
-            .FirstOrDefaultAsync(t => t.Token == request.RefreshToken && t.UserId == Guid.Parse(userId));
-
-        if (token is not null)
-        {
-            token.RevokedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
-        }
-
-        return Ok();
+        return Ok(new AuthResponse(accessToken, expiresAt, isNew));
     }
 }

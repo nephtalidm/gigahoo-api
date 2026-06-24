@@ -21,14 +21,10 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
     {
         var account = await db.Accounts
             .Include(a => a.Category)
-            .Include(a => a.Country)
             .Include(a => a.Region)
             .FirstOrDefaultAsync(a => a.Id == accountId);
 
         if (account is null) return NotFound(new { error = "Account not found" });
-
-        var featureSettings = await db.FeatureSettings
-            .FirstOrDefaultAsync(f => f.AccountId == accountId);
 
         string? regionName = null;
         if (account.RegionId.HasValue)
@@ -54,28 +50,28 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
             account.City,
             regionName,
             account.PostalCode,
-            account.Country?.Name ?? "",
+            await db.Countries.FindAsync(account.CountryCodeId) is { } country ? country.Name : "",
             new VoiceAgentFeatureSettings(
-                featureSettings?.AnswerQuestions ?? false,
-                featureSettings?.ServicesInfo,
-                featureSettings?.ServeArea ?? false,
-                featureSettings?.DistanceKm ?? 0,
-                featureSettings?.QuoteInspection ?? false,
-                featureSettings?.PricePerKm ?? 0
+                account.AnswerQuestions,
+                account.ServicesInfo,
+                account.ServeArea,
+                account.DistanceKm,
+                account.QuoteInspection,
+                account.PricePerKm
             )
         ));
     }
 
     /// <summary>
-    /// Create a call record after a call ends (used by voice agent)
+    /// Create a conversation record after a call ends (used by voice agent)
     /// </summary>
-    [HttpPost("calls/{accountId:guid}")]
-    public async Task<IActionResult> CreateCall(Guid accountId, [FromBody] CreateCallRequest request)
+    [HttpPost("conversations/{accountId:guid}")]
+    public async Task<IActionResult> CreateConversation(Guid accountId, [FromBody] CreateConversationRequest request)
     {
         var account = await db.Accounts.FindAsync(accountId);
         if (account is null) return NotFound(new { error = "Account not found" });
 
-        var call = new Call
+        var conversation = new Conversation
         {
             AccountId = accountId,
             CallerName = request.CallerName,
@@ -88,25 +84,10 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
             CreatedAt = DateTime.UtcNow,
         };
 
-        db.Calls.Add(call);
+        db.Conversations.Add(conversation);
         await db.SaveChangesAsync();
 
-        // Add collected info
-        if (request.CollectedInfo?.Any() == true)
-        {
-            foreach (var info in request.CollectedInfo)
-            {
-                db.CallCollectedInfo.Add(new CallCollectedInfo
-                {
-                    CallId = call.Id,
-                    Label = info.Label,
-                    Value = info.Value,
-                });
-            }
-            await db.SaveChangesAsync();
-        }
-
-        return Ok(new { callId = call.Id });
+        return Ok(new { conversationId = conversation.Id });
     }
 }
 
@@ -137,12 +118,11 @@ public record VoiceAgentFeatureSettings(
     decimal PricePerKm
 );
 
-public record CreateCallRequest(
+public record CreateConversationRequest(
     string? CallerName,
     string CallerPhone,
     int DurationSeconds,
     byte? LanguageId,
     string? Summary,
-    string Status,
-    List<CollectedInfoDto>? CollectedInfo
+    string Status
 );

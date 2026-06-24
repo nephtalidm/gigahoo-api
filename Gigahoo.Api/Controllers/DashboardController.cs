@@ -20,20 +20,19 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
         var accountId = GetAccountId();
         var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
 
-        var callsQuery = db.Calls.Where(c => c.AccountId == accountId);
+        var conversationsQuery = db.Conversations.Where(c => c.AccountId == accountId);
 
-        var callsAnswered = await callsQuery.CountAsync(c => c.Status == "Answered" || c.Status == "Completed");
-        var avgDuration = await callsQuery
+        var conversationsAnswered = await conversationsQuery.CountAsync(c => c.Status == "Answered" || c.Status == "Completed");
+        var avgDuration = await conversationsQuery
             .Where(c => c.DurationSeconds > 0)
             .AverageAsync(c => (double?)c.DurationSeconds) ?? 0;
 
-        var recentCalls = await db.Calls
+        var recentConversations = await db.Conversations
             .Include(c => c.Language)
-            .Include(c => c.CollectedInfo)
             .Where(c => c.AccountId == accountId)
             .OrderByDescending(c => c.DateTimeUtc)
             .Take(4)
-            .Select(c => new CallResponse(
+            .Select(c => new ConversationResponse(
                 c.Id,
                 c.CallerName,
                 c.CallerPhone,
@@ -41,8 +40,7 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
-                c.Status,
-                c.CollectedInfo.Select(ci => new CollectedInfoDto(ci.Label, ci.Value)).ToList()
+                c.Status
             ))
             .ToListAsync();
 
@@ -58,9 +56,9 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
             account.MinutesUsed,
             remaining,
             billingPeriod,
-            callsAnswered,
+            conversationsAnswered,
             avgDuration,
-            recentCalls
+            recentConversations
         ));
     }
 }

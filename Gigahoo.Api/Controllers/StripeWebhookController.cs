@@ -37,6 +37,9 @@ public class StripeWebhookController(
 
         switch (stripeEvent.Type)
         {
+            case "checkout.session.completed":
+                await HandleCheckoutCompleted(stripeEvent.Data.Object as Stripe.Checkout.Session);
+                break;
             case "invoice.paid":
                 await HandleInvoicePaid(stripeEvent.Data.Object as Stripe.Invoice);
                 break;
@@ -57,12 +60,39 @@ public class StripeWebhookController(
         return Ok();
     }
 
+    private async Task HandleCheckoutCompleted(Stripe.Checkout.Session? session)
+    {
+        if (session is null) return;
+
+        var account = await db.Accounts
+            .FirstOrDefaultAsync(a => a.StripeCustomerId == session.CustomerId);
+        if (account is null) return;
+
+        // Save subscription ID and upgrade plan
+        if (session.SubscriptionId is not null)
+        {
+            account.StripeSubscriptionId = session.SubscriptionId;
+
+            // Map plan from Stripe metadata or default to Starter
+            var priceId = session.Metadata?.GetValueOrDefault("priceId");
+            var plan = await db.Plans.FirstOrDefaultAsync(p =>
+                config[$"Stripe:PriceIds:{p.Id}"] == priceId);
+            if (plan is not null)
+                account.PlanId = plan.Id;
+
+            account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
+            account.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            logger.LogInformation("Checkout completed for account {Account}, subscription {Sub}", account.Id, session.SubscriptionId);
+        }
+    }
+
     private async Task HandleInvoicePaid(Stripe.Invoice? invoice)
     {
         if (invoice is null) return;
 
         var account = await db.Accounts
-            .Include(a => a.Country)
             .FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
         if (account is null) return;
 
@@ -80,12 +110,12 @@ public class StripeWebhookController(
             CreatedAt = DateTime.UtcNow,
         });
 
-        // Provision phone number if not already done
-        if (string.IsNullOrEmpty(account.PhoneNumberSid))
+        // Provision phone number if not already done and email is verified
+        if (string.IsNullOrEmpty(account.PhoneNumberSid) && account.IsEmailConfirmed)
         {
             try
             {
-                var countryCode = account.Country?.Code ?? "US";
+                var countryCode = await db.Countries.FindAsync(account.CountryCodeId) is { } c ? c.Code : "US";
                 
                 // First, try to get an available number from the pool
                 var phoneNumber = await twilio.GetAvailableNumberAsync(countryCode);

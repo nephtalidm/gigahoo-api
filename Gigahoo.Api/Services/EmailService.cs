@@ -18,15 +18,95 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = "Sign in to Gigahoo";
+        message.Subject = "Your Gigahoo verification code";
 
-        var body = $"""
+        // Extract the 6-digit code from the URL
+        var code = "------";
+        try
+        {
+            var uri = new Uri(magicLink);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("code", out var codeValues))
+                code = codeValues.FirstOrDefault() ?? "------";
+        }
+        catch { }
+
+        var body = $$"""
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Sign in to Gigahoo</h2>
-                <p>Click the button below to sign in to your account. This link expires in 15 minutes.</p>
-                <p><a href="{magicLink}" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Sign In</a></p>
-                <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+            <head><meta charset="utf-8"></head>
+            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f9fafb;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 0;">
+                    <tr>
+                        <td align="center">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden;">
+                                <!-- Header -->
+                                <tr>
+                                    <td style="padding: 32px 40px 0; text-align: center;">
+                                        <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; background-color: #2563eb; text-align: center;">
+                                            <span style="color: white; font-size: 24px; font-weight: bold;">G</span>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Body -->
+                                <tr>
+                                    <td style="padding: 24px 40px 32px;">
+                                        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">Verify your email</h1>
+                                        <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4b5563; text-align: center;">
+                                            Use the code below to verify your email and continue setting up your account.
+                                        </p>
+
+                                        <!-- Code Display -->
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td align="center" style="padding-bottom: 24px;">
+                                                    <div style="display: inline-block; background-color: #f3f4f6; border-radius: 8px; padding: 16px 24px;">
+                                                        <span style="font-family: 'Courier New', monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #111827; user-select: all;">{{code}}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- CTA Button -->
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td align="center" style="padding-bottom: 16px;">
+                                                    <a href="{{magicLink}}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">Verify Email</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- Fallback link -->
+                                        <p style="margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: #6b7280; text-align: center;">
+                                            Or copy and paste this link into your browser:
+                                        </p>
+                                        <p style="margin: 0 0 24px; padding: 12px; background-color: #f3f4f6; border-radius: 6px; font-size: 12px; color: #374151; word-break: break-all; text-align: center; font-family: monospace;">
+                                            {{magicLink}}
+                                        </p>
+
+                                        <!-- Expiry notice -->
+                                        <p style="margin: 0 0 8px; font-size: 13px; color: #9ca3af; text-align: center;">
+                                            This code expires in 15 minutes and can only be used once.
+                                        </p>
+                                        <p style="margin: 0; font-size: 13px; color: #9ca3af; text-align: center;">
+                                            If you didn't request this, you can safely ignore this email.
+                                        </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="padding: 24px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+                                        <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                                            &copy; {DateTime.UtcNow.Year} Gigahoo. All rights reserved.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </body>
             </html>
             """;

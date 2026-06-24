@@ -13,7 +13,8 @@ namespace Gigahoo.Api.Controllers;
 [EnableRateLimiting("api")]
 public class BillingController(
     GigahooDbContext db,
-    IStripeService stripe) : ControllerBase
+    IStripeService stripe,
+    IConfiguration config) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
@@ -61,31 +62,33 @@ public class BillingController(
         return Ok(result);
     }
 
-    [HttpPost("change-plan")]
-    public async Task<IActionResult> ChangePlan([FromBody] ChangePlanRequest request)
+    [HttpPost("checkout")]
+    public async Task<ActionResult<CheckoutResponse>> CreateCheckout([FromBody] CheckoutRequest request)
     {
         var accountId = GetAccountId();
         var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
-        var newPlan = await db.Plans.FindAsync(request.PlanId);
+        var plan = await db.Plans.FindAsync(request.PlanId);
 
-        if (newPlan is null) return NotFound(new { error = "Plan not found" });
+        if (plan is null) return NotFound(new { error = "Plan not found" });
+        if (plan.PriceMonthly == 0) return BadRequest(new { error = "Free plans don't need checkout" });
 
-        account.PlanId = request.PlanId;
-        account.UpdatedAt = DateTime.UtcNow;
-
-        // Handle Stripe subscription change if applicable
-        if (account.StripeSubscriptionId is not null && newPlan.PriceMonthly > 0)
+        // Create Stripe customer if not exists
+        if (account.StripeCustomerId is null)
         {
-            // In production: update Stripe subscription via StripeService
-        }
-        else if (account.StripeSubscriptionId is not null && newPlan.PriceMonthly == 0)
-        {
-            await stripe.CancelSubscriptionAsync(account.StripeSubscriptionId);
-            account.StripeSubscriptionId = null;
+            var customerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName);
+            account.StripeCustomerId = customerId;
+            await db.SaveChangesAsync();
         }
 
-        await db.SaveChangesAsync();
-        return Ok(new { message = "Plan updated", plan = newPlan.Name });
+        var priceId = config[$"Stripe:PriceIds:{request.PlanId}"];
+        if (string.IsNullOrEmpty(priceId)) return BadRequest(new { error = "No Stripe price configured for this plan" });
+
+        var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing?session_id={{CHECKOUT_SESSION_ID}}";
+        var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";
+
+        var url = await stripe.CreateCheckoutSessionAsync(account.StripeCustomerId, priceId, successUrl, cancelUrl);
+
+        return Ok(new CheckoutResponse(url));
     }
 
     [HttpGet("invoices")]
@@ -101,19 +104,6 @@ public class BillingController(
             .ToListAsync();
 
         return Ok(invoices);
-    }
-
-    [HttpGet("payment-method")]
-    public async Task<ActionResult<PaymentMethodResponse>> GetPaymentMethod()
-    {
-        var accountId = GetAccountId();
-        var pm = await db.PaymentMethods
-            .Where(p => p.AccountId == accountId && p.IsDefault)
-            .FirstOrDefaultAsync();
-
-        if (pm is null) return NotFound();
-
-        return Ok(new PaymentMethodResponse(pm.Id, pm.Brand, pm.Last4, pm.ExpMonth, pm.ExpYear, pm.IsDefault));
     }
 
     [HttpPost("portal")]
@@ -139,3 +129,6 @@ public class BillingController(
         _ => []
     };
 }
+
+public record CheckoutRequest(byte PlanId);
+public record CheckoutResponse(string Url);

@@ -1,6 +1,7 @@
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Dtos;
 using Gigahoo.Api.Entities;
+using Gigahoo.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,36 +12,52 @@ namespace Gigahoo.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [EnableRateLimiting("api")]
-public class AccountController(GigahooDbContext db) : ControllerBase
+public class AccountController(
+    GigahooDbContext db,
+    IJwtTokenService jwt) : ControllerBase
 {
-    private Guid GetUserId() => Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
     [HttpPost]
     public async Task<ActionResult<AccountResponse>> Create([FromBody] CreateAccountRequest request)
     {
-        var userId = GetUserId();
+        var accountId = GetAccountId();
 
-        var existing = await db.Accounts.AnyAsync(a => a.UserId == userId);
-        if (existing) return Conflict(new { error = "Account already exists" });
+        var account = await db.Accounts
+            .Include(a => a.Plan)
+            .Include(a => a.Category)
+            .Include(a => a.Region)
+            .FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
 
-        var account = new Account
+        // Check email uniqueness (only if email changed)
+        if (account.NormalizedEmail != request.Email.ToLowerInvariant())
         {
-            UserId = userId,
-            BusinessName = request.BusinessName,
-            CategoryId = request.CategoryId,
-            BusinessPhone = request.BusinessPhone,
-            PhoneCountryCode = request.PhoneCountryCode,
-            Email = request.Email,
-            PlanId = request.PlanId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
+            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.Id != accountId);
+            if (emailTaken) return Conflict(new { error = "This email is already registered" });
+        }
 
-        db.Accounts.Add(account);
+        // Check phone uniqueness
+        var normalizedPhone = request.BusinessPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+        var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.Id != accountId);
+        if (phoneTaken) return Conflict(new { error = "This phone number is already in use" });
+
+        account.BusinessName = request.BusinessName;
+        account.CategoryId = request.CategoryId;
+        account.BusinessPhone = request.BusinessPhone;
+        account.PhoneCountryCode = request.PhoneCountryCode;
+        account.Email = request.Email;
+        account.NormalizedEmail = request.Email.ToLowerInvariant();
+        account.PlanId = request.PlanId;
+        account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        account.UpdatedAt = DateTime.UtcNow;
+
         await db.SaveChangesAsync();
 
-        return Ok(await MapToResponse(account));
+        var token = jwt.GenerateAccessToken(account);
+        var expiresAt = DateTime.UtcNow.AddDays(7);
+
+        return Ok(new { token, expiresAt, account = await MapToResponse(account) });
     }
 
     [HttpGet]
@@ -50,7 +67,6 @@ public class AccountController(GigahooDbContext db) : ControllerBase
         var account = await db.Accounts
             .Include(a => a.Plan)
             .Include(a => a.Category)
-            .Include(a => a.Country)
             .Include(a => a.Region)
             .FirstOrDefaultAsync(a => a.Id == accountId);
 
@@ -65,7 +81,6 @@ public class AccountController(GigahooDbContext db) : ControllerBase
         var account = await db.Accounts
             .Include(a => a.Plan)
             .Include(a => a.Category)
-            .Include(a => a.Country)
             .Include(a => a.Region)
             .FirstOrDefaultAsync(a => a.Id == accountId);
 
@@ -85,14 +100,12 @@ public class AccountController(GigahooDbContext db) : ControllerBase
         account.RegionId = request.RegionId;
         account.RegionCustom = request.RegionCustom;
         account.PostalCode = request.PostalCode;
-        account.CountryId = request.CountryId;
+        account.CountryCodeId = request.CountryId;
         account.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
 
-        // Reload includes
         await db.Entry(account).Reference(a => a.Category).LoadAsync();
-        await db.Entry(account).Reference(a => a.Country).LoadAsync();
         if (account.RegionId.HasValue)
             await db.Entry(account).Reference(a => a.Region).LoadAsync();
 
@@ -103,14 +116,11 @@ public class AccountController(GigahooDbContext db) : ControllerBase
     public async Task<IActionResult> DeleteAccount()
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts
-            .Include(a => a.User)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FindAsync(accountId);
 
         if (account is null) return NotFound();
 
-        // Delete the user (this will cascade delete the account due to foreign key)
-        db.Users.Remove(account.User);
+        db.Accounts.Remove(account);
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Account deleted successfully" });
@@ -120,12 +130,12 @@ public class AccountController(GigahooDbContext db) : ControllerBase
     {
         var plan = account.Plan ?? await db.Plans.FindAsync(account.PlanId);
         var category = account.Category ?? await db.BusinessCategories.FindAsync(account.CategoryId);
-        var country = account.Country ?? await db.Countries.FindAsync(account.CountryId);
+        var country = await db.Countries.FindAsync(account.CountryCodeId);
 
         string? regionName = null;
         if (account.RegionId.HasValue)
         {
-            var region = account.Region ?? await db.Regions.FindAsync(account.RegionId);
+            var region = await db.Regions.FindAsync(account.RegionId);
             regionName = region?.Name ?? account.RegionCustom;
         }
         else
@@ -139,10 +149,10 @@ public class AccountController(GigahooDbContext db) : ControllerBase
 
         return new AccountResponse(
             account.Id,
-            account.BusinessName,
+            account.BusinessName ?? "",
             category?.Name ?? "",
-            account.CategoryId,
-            account.BusinessPhone,
+            account.CategoryId ?? 0,
+            account.BusinessPhone ?? "",
             account.PhoneCountryCode,
             account.Email,
             account.ServiceArea,
@@ -155,7 +165,7 @@ public class AccountController(GigahooDbContext db) : ControllerBase
             regionName,
             account.PostalCode,
             country?.Name ?? "",
-            account.CountryId,
+            (short)(account.CountryCodeId ?? 0),
             plan?.Name ?? "",
             account.PlanId,
             plan?.IncludedMinutes ?? 0,
