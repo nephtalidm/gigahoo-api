@@ -56,7 +56,53 @@ public class PhoneNumberCleanupService(
             }
         }
 
+        await ReleaseAbandonedReservationsAsync();
+
         await db.SaveChangesAsync();
         logger.LogInformation("Phone number cleanup completed");
+    }
+
+    /// <summary>
+    /// Release numbers that were RESERVED during checkout but never paid for. The
+    /// reserve-then-charge flow assigns a number before payment; if the customer
+    /// abandons checkout, the account ends up with a PhoneNumberSid but no
+    /// StripeSubscriptionId. After 24h, hand the number back to the pool.
+    /// (Free accounts never reserve a number, so this only catches abandoned paid checkouts.)
+    /// </summary>
+    private async Task ReleaseAbandonedReservationsAsync()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-24);
+
+        var abandoned = await db.PhoneNumbers
+            .Where(p => p.Status == Entities.PhoneNumberStatus.Assigned)
+            .Where(p => p.AssignedAt != null && p.AssignedAt < cutoff)
+            .Join(db.Accounts,
+                p => p.AssignedAccountId,
+                a => a.Id,
+                (p, a) => new { Phone = p, Account = a })
+            .Where(x => x.Account.PhoneNumberSid != null && x.Account.StripeSubscriptionId == null)
+            .Select(x => x.Account)
+            .ToListAsync();
+
+        logger.LogInformation("Found {Count} abandoned phone reservations to release", abandoned.Count);
+
+        foreach (var account in abandoned)
+        {
+            try
+            {
+                await twilio.ReleaseNumberFromAccountAsync(account.Id);
+
+                account.PhoneNumberSid = null;
+                account.TelephonyProvider = null;
+                account.ForwardingPhone = null;
+                account.UpdatedAt = DateTime.UtcNow;
+
+                logger.LogInformation("Released abandoned phone reservation for account {AccountId}", account.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to release abandoned phone reservation for account {AccountId}", account.Id);
+            }
+        }
     }
 }

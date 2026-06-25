@@ -70,6 +70,10 @@ public class AccountController(
         account.City = request.City;
         account.RegionCustom = request.Region;
         account.PostalCode = request.PostalCode;
+        // Gigahoo is currently only available in the US and Canada — reject any
+        // other business country before saving.
+        if (request.CountryCode?.ToUpperInvariant() is not ("US" or "CA"))
+            return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
         // Resolve the business country (ISO-2) to its Country id. Leave null if
         // unknown — never fail signup over an unrecognized code.
         account.CountryCodeId = (await db.Countries.FirstOrDefaultAsync(c => c.Code == request.CountryCode))?.Id;

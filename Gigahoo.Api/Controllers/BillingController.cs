@@ -14,7 +14,10 @@ namespace Gigahoo.Api.Controllers;
 public class BillingController(
     GigahooDbContext db,
     IStripeService stripe,
-    IConfiguration config) : ControllerBase
+    IConfiguration config,
+    ITwilioService twilio,
+    Gigahoo.Api.Services.Providers.ITelephonyProvider telephony,
+    ILogger<BillingController> logger) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
@@ -88,12 +91,75 @@ public class BillingController(
         if (string.IsNullOrEmpty(currency))
             return BadRequest(new { error = "Could not determine a billing currency for this account's country" });
 
+        // Defense-in-depth: Gigahoo is currently only available in the US and Canada.
+        var billingCountryCode = (country?.Code ?? account.PhoneCountryCode)?.ToUpperInvariant();
+        if (billingCountryCode is not ("US" or "CA"))
+            return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
+
         // Price comes from the PlanPrice table for that currency. If it isn't set up,
         // fail explicitly rather than defaulting to a currency.
         var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.IsActive);
         if (planPrice is null || string.IsNullOrEmpty(planPrice.StripePriceId))
             return BadRequest(new { error = $"No Stripe price configured for plan '{plan.Name}' in {currency}" });
         var priceId = planPrice.StripePriceId;
+
+        // Reserve-then-charge: secure the phone number BEFORE creating the Checkout
+        // session so we never take payment for a number we can't deliver. The
+        // assignment email/SMS are sent later (on the first paid invoice), not here.
+        if (string.IsNullOrEmpty(account.PhoneNumberSid))
+        {
+            var numberCountryCode = country?.Code ?? account.PhoneCountryCode ?? "US";
+            try
+            {
+                // Pool-first, then purchase a fresh number if the pool is empty.
+                var phoneNumber = await twilio.GetAvailableNumberAsync(numberCountryCode);
+                if (phoneNumber == null)
+                {
+                    var purchased = await twilio.PurchasePhoneNumberAsync(numberCountryCode);
+                    if (purchased is not null)
+                    {
+                        phoneNumber = new Entities.PhoneNumber
+                        {
+                            Sid = purchased.Sid,
+                            Number = purchased.PhoneNumber,
+                            CountryCode = numberCountryCode,
+                            Provider = telephony.ProviderName,
+                            Status = Entities.PhoneNumberStatus.Available,
+                            MonthlyCost = 1.15m,
+                            PurchasedAt = DateTime.UtcNow
+                        };
+                        db.PhoneNumbers.Add(phoneNumber);
+                        await db.SaveChangesAsync();
+                        logger.LogInformation("Purchased new phone number {Number} and added to pool", purchased.PhoneNumber);
+                    }
+                }
+
+                if (phoneNumber == null)
+                {
+                    logger.LogWarning("Could not reserve a phone number for account {Account} before checkout", account.Id);
+                    return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
+                }
+
+                // Assign the number to the account so PhoneNumberSid is set, then
+                // point its voice webhook at the agent (same as the webhook handler).
+                await twilio.AssignNumberToAccountAsync(phoneNumber, account.Id);
+                account.PhoneNumberSid = phoneNumber.Sid;
+                account.TelephonyProvider = phoneNumber.Provider;
+                account.ForwardingPhone = phoneNumber.Number;
+
+                var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
+                await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
+
+                account.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                logger.LogInformation("Reserved phone number {Number} for account {Account} before checkout", phoneNumber.Number, account.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error reserving phone number for account {Account} before checkout", account.Id);
+                return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
+            }
+        }
 
         var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing?session_id={{CHECKOUT_SESSION_ID}}";
         var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";

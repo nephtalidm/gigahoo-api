@@ -124,16 +124,19 @@ public class StripeWebhookController(
         account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
         account.UpdatedAt = DateTime.UtcNow;
 
-        // Provision phone number if not already done and email is verified
+        // Reserve-then-charge: the number is normally secured during checkout
+        // (BillingController), before payment. This is a fallback for the rare case
+        // where the reservation didn't happen — provision now so the account isn't
+        // left without a number after paying.
         if (string.IsNullOrEmpty(account.PhoneNumberSid) && account.IsEmailConfirmed)
         {
             try
             {
                 var countryCode = await db.Countries.FindAsync(account.CountryCodeId) is { } c ? c.Code : "US";
-                
+
                 // First, try to get an available number from the pool
                 var phoneNumber = await twilio.GetAvailableNumberAsync(countryCode);
-                
+
                 if (phoneNumber == null)
                 {
                     // No available number in pool, purchase a new one via the configured carrier.
@@ -162,7 +165,7 @@ public class StripeWebhookController(
                         logger.LogWarning("Failed to purchase phone number for account {Account}", account.Id);
                     }
                 }
-                
+
                 if (phoneNumber != null)
                 {
                     // Assign number to account
@@ -176,36 +179,41 @@ public class StripeWebhookController(
                     var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
                     await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
 
-                    // Send email to customer with their phone number
-                    try
-                    {
-                        await email.SendPhoneNumberAssignedAsync(account.Email, account.BusinessName, phoneNumber.Number);
-                    }
-                    catch (Exception emailEx)
-                    {
-                        logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.Id);
-                    }
-
-                    // Also notify the owner by SMS.
-                    var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
-                    if (!string.IsNullOrWhiteSpace(ownerPhone))
-                    {
-                        try
-                        {
-                            await smsProvider.SendAsync(ownerPhone, $"Your new Gigahoo number is {phoneNumber.Number}");
-                        }
-                        catch (Exception smsEx)
-                        {
-                            logger.LogError(smsEx, "Failed to send phone number SMS to account {Account}", account.Id);
-                        }
-                    }
-
-                    logger.LogInformation("Assigned phone number {Number} to account {Account}", phoneNumber.Number, account.Id);
+                    logger.LogInformation("Assigned phone number {Number} to account {Account} (fallback at invoice.paid)", phoneNumber.Number, account.Id);
                 }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error provisioning phone number for account {Account}", account.Id);
+            }
+        }
+
+        // Notify the owner of their new number only on the FIRST invoice of the
+        // subscription (subscription_create) — never on renewals (subscription_cycle).
+        if (invoice.BillingReason == "subscription_create" && !string.IsNullOrEmpty(account.ForwardingPhone))
+        {
+            // Email the customer their new phone number.
+            try
+            {
+                await email.SendPhoneNumberAssignedAsync(account.Email, account.BusinessName, account.ForwardingPhone);
+            }
+            catch (Exception emailEx)
+            {
+                logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.Id);
+            }
+
+            // Also notify the owner by SMS.
+            var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+            if (!string.IsNullOrWhiteSpace(ownerPhone))
+            {
+                try
+                {
+                    await smsProvider.SendAsync(ownerPhone, $"Your new Gigahoo number is {account.ForwardingPhone}");
+                }
+                catch (Exception smsEx)
+                {
+                    logger.LogError(smsEx, "Failed to send phone number SMS to account {Account}", account.Id);
+                }
             }
         }
 
