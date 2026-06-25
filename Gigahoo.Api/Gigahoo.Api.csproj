@@ -1,10 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Gigahoo.Api</RootNamespace>
+    <UserSecretsId>487cec11-9bc0-404f-ae75-711aea49418c</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

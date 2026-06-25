@@ -27,22 +27,40 @@ public class AuthController(
         if (payload is null) return Unauthorized(new { error = "Invalid Google token" });
 
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.GoogleSubjectId == payload.Subject);
-        var isNew = account is null;
+        var isNew = false;
 
-        if (isNew)
+        if (account is null)
         {
-            account = new Account
+            // Link to an existing account that already owns this email (e.g. one
+            // created via email magic-link) instead of creating a duplicate.
+            // Only auto-link when Google has verified the address — linking on an
+            // unverified email would be an account-takeover risk.
+            if (payload.EmailVerified)
+                account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == payload.Email.ToLowerInvariant());
+
+            if (account is not null)
             {
-                Email = payload.Email,
-                NormalizedEmail = payload.Email.ToLowerInvariant(),
-                GoogleSubjectId = payload.Subject,
-                DisplayName = payload.Name,
-                IsEmailConfirmed = payload.EmailVerified,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                LastLoginAt = DateTime.UtcNow,
-            };
-            db.Accounts.Add(account);
+                account.GoogleSubjectId = payload.Subject;
+                account.DisplayName ??= payload.Name;
+                account.IsEmailConfirmed = true;
+                account.LastLoginAt = DateTime.UtcNow;
+            }
+            else
+            {
+                isNew = true;
+                account = new Account
+                {
+                    Email = payload.Email,
+                    NormalizedEmail = payload.Email.ToLowerInvariant(),
+                    GoogleSubjectId = payload.Subject,
+                    DisplayName = payload.Name,
+                    IsEmailConfirmed = payload.EmailVerified,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    LastLoginAt = DateTime.UtcNow,
+                };
+                db.Accounts.Add(account);
+            }
         }
         else
         {
@@ -106,9 +124,9 @@ public class AuthController(
 
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
 
-        if (account is not null && account.IsEmailConfirmed)
-            return BadRequest(new { error = "Email already verified. Please sign in instead." });
-
+        // A valid magic link proves the user owns this email, so an existing
+        // account (created via email, Google, or otherwise) is simply logged in —
+        // making email and Google interchangeable for the same verified address.
         var isNew = account is null;
 
         if (isNew)

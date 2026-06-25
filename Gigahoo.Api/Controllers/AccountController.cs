@@ -14,7 +14,8 @@ namespace Gigahoo.Api.Controllers;
 [EnableRateLimiting("api")]
 public class AccountController(
     GigahooDbContext db,
-    IJwtTokenService jwt) : ControllerBase
+    IJwtTokenService jwt,
+    IGoogleAuthService googleAuth) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
@@ -42,6 +43,19 @@ public class AccountController(
         var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.Id != accountId);
         if (phoneTaken) return Conflict(new { error = "This phone number is already in use" });
 
+        // Password is required only for plain-email signups. SMS and Google are
+        // passwordless (a password can be added later in Settings).
+        var isEmailMethod = account.GoogleSubjectId is null && !account.IsPhoneConfirmed;
+        if (string.IsNullOrEmpty(request.Password))
+        {
+            if (isEmailMethod && account.PasswordHash is null)
+                return BadRequest(new { error = "Password is required" });
+        }
+        else
+        {
+            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        }
+
         account.BusinessName = request.BusinessName;
         account.CategoryId = request.CategoryId;
         account.BusinessPhone = request.BusinessPhone;
@@ -49,7 +63,6 @@ public class AccountController(
         account.Email = request.Email;
         account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.PlanId = request.PlanId;
-        account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         account.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -86,11 +99,19 @@ public class AccountController(
 
         if (account is null) return NotFound();
 
+        // Enforce email uniqueness across all accounts (any signup method).
+        if (account.NormalizedEmail != request.Email.ToLowerInvariant())
+        {
+            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.Id != accountId);
+            if (emailTaken) return Conflict(new { error = "This email is already registered" });
+        }
+
         account.BusinessName = request.BusinessName;
         account.CategoryId = request.CategoryId;
         account.BusinessPhone = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
+        account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.WebsiteUrl = request.WebsiteUrl;
         account.ServiceArea = request.ServiceArea;
         account.BusinessHours = request.BusinessHours;
@@ -124,6 +145,53 @@ public class AccountController(
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Account deleted successfully" });
+    }
+
+    [HttpPost("password")]
+    public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        // Changing an existing password requires the current one. Setting a
+        // password for the first time (e.g. a Google account) does not.
+        if (account.PasswordHash is not null)
+        {
+            if (string.IsNullOrEmpty(request.CurrentPassword) ||
+                !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, account.PasswordHash))
+                return BadRequest(new { error = "Current password is incorrect" });
+        }
+
+        account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Password updated" });
+    }
+
+    [HttpPost("link-google")]
+    public async Task<IActionResult> LinkGoogle([FromBody] GoogleAuthRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var payload = await googleAuth.ValidateIdTokenAsync(request.IdToken);
+        if (payload is null) return Unauthorized(new { error = "Invalid Google token" });
+        if (!payload.EmailVerified) return BadRequest(new { error = "Google email is not verified" });
+
+        // Don't steal a Google identity already linked to a different account.
+        var inUse = await db.Accounts.AnyAsync(a => a.GoogleSubjectId == payload.Subject && a.Id != accountId);
+        if (inUse) return Conflict(new { error = "This Google account is already linked to another account" });
+
+        account.GoogleSubjectId = payload.Subject;
+        account.DisplayName ??= payload.Name;
+        account.IsEmailConfirmed = true;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Google linked" });
     }
 
     private async Task<AccountResponse> MapToResponse(Account account)
@@ -171,7 +239,9 @@ public class AccountController(
             plan?.IncludedMinutes ?? 0,
             billingPeriod,
             account.MinutesUsed,
-            account.CreatedAt
+            account.CreatedAt,
+            account.PasswordHash is not null,
+            account.GoogleSubjectId is not null
         );
     }
 }

@@ -42,14 +42,16 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         {
             e.ToTable("Region");
             e.HasKey(x => x.Id);
-            e.HasOne<Country>().WithMany().HasForeignKey(x => x.CountryId).HasConstraintName("FK_Region_Country").OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.Country).WithMany().HasForeignKey(x => x.CountryId).HasConstraintName("FK_Region_Country").OnDelete(DeleteBehavior.NoAction);
             e.HasIndex(x => new { x.CountryId, x.Code }).IsUnique();
         });
 
         // Account
         modelBuilder.Entity<Account>(e =>
         {
-            e.ToTable("Account");
+            // The Account table has an AFTER UPDATE trigger (TR_Account_UpdatedAt),
+            // so EF must not use the SQL OUTPUT clause for inserts/updates.
+            e.ToTable("Account", tb => tb.HasTrigger("TR_Account_UpdatedAt"));
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("[NormalizedEmail] IS NOT NULL");
             e.HasIndex(x => x.NormalizedPhone).IsUnique().HasFilter("[NormalizedPhone] IS NOT NULL");

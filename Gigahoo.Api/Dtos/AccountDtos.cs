@@ -22,8 +22,10 @@ public record CreateAccountRequest
     [Required]
     public byte PlanId { get; init; }
 
-    [Required, MinLength(8), MaxLength(128)]
-    public string Password { get; init; } = default!;
+    // Optional: Google (OAuth) accounts don't need a password. Required for
+    // email/SMS signups (enforced in the controller).
+    [MinLength(8), MaxLength(128)]
+    public string? Password { get; init; }
 }
 
 public record UpdateAccountRequest
@@ -97,5 +99,15 @@ public record AccountResponse(
     int IncludedMinutes,
     string BillingPeriod,
     int MinutesUsed,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    bool HasPassword,
+    bool HasGoogle
 );
+
+public record SetPasswordRequest
+{
+    public string? CurrentPassword { get; init; }
+
+    [Required, MinLength(8), MaxLength(128)]
+    public string NewPassword { get; init; } = default!;
+}
