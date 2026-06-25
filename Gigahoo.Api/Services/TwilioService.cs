@@ -34,12 +34,14 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
     public async Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode)
     {
-        // Testing: when a fixed number SID is configured, ALWAYS reuse that number
-        // (detach it from any prior account and mark it Available) instead of buying.
-        var reuseSid = config["Telephony:ReuseNumberSid"];
-        if (!string.IsNullOrWhiteSpace(reuseSid))
+        // Testing: when reuse SIDs are configured, reuse the one matching this
+        // country (detach from any prior account, mark Available) instead of buying.
+        var reuseSids = (config["Telephony:ReuseNumberSids"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (reuseSids.Length > 0)
         {
-            var reuse = await db.PhoneNumbers.FirstOrDefaultAsync(p => p.Sid == reuseSid);
+            var reuse = await db.PhoneNumbers
+                .FirstOrDefaultAsync(p => reuseSids.Contains(p.Sid) && p.CountryCode == countryCode);
             if (reuse is not null)
             {
                 if (reuse.AssignedAccountId is Guid prevId)
@@ -85,8 +87,9 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
         if (phoneNumber != null)
         {
-            var reuseSid = config["Telephony:ReuseNumberSid"];
-            if (!string.IsNullOrWhiteSpace(reuseSid) && phoneNumber.Sid == reuseSid)
+            var reuseSids = (config["Telephony:ReuseNumberSids"] ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (reuseSids.Contains(phoneNumber.Sid))
             {
                 // Reusable test number — free it but never de-provision at the carrier.
                 phoneNumber.Status = Entities.PhoneNumberStatus.Available;
