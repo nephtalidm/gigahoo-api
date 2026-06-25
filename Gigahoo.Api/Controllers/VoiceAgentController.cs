@@ -1,6 +1,8 @@
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Dtos;
 using Gigahoo.Api.Entities;
+using Gigahoo.Api.Services;
+using Gigahoo.Api.Services.Providers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +13,11 @@ namespace Gigahoo.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/voice-agent")]
-public class VoiceAgentController(GigahooDbContext db) : ControllerBase
+public class VoiceAgentController(
+    GigahooDbContext db,
+    ISmsProvider smsProvider,
+    IEmailService email,
+    ILogger<VoiceAgentController> logger) : ControllerBase
 {
     /// <summary>
     /// Get account configuration for a specific account (used by voice agent before a call)
@@ -22,9 +28,13 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
         var account = await db.Accounts
             .Include(a => a.Category)
             .Include(a => a.Region)
+            .Include(a => a.Plan)
             .FirstOrDefaultAsync(a => a.Id == accountId);
 
         if (account is null) return NotFound(new { error = "Account not found" });
+
+        var minutesRemaining = (account.Plan?.IncludedMinutes ?? 0) - account.MinutesUsed;
+        var canAnswer = minutesRemaining > 0;
 
         string? regionName = null;
         if (account.RegionId.HasValue)
@@ -58,7 +68,9 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
                 account.DistanceKm,
                 account.QuoteInspection,
                 account.PricePerKm
-            )
+            ),
+            minutesRemaining,
+            canAnswer
         ));
     }
 
@@ -68,7 +80,9 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
     [HttpPost("conversations/{accountId:guid}")]
     public async Task<IActionResult> CreateConversation(Guid accountId, [FromBody] CreateConversationRequest request)
     {
-        var account = await db.Accounts.FindAsync(accountId);
+        var account = await db.Accounts
+            .Include(a => a.Plan)
+            .FirstOrDefaultAsync(a => a.Id == accountId);
         if (account is null) return NotFound(new { error = "Account not found" });
 
         var conversation = new Conversation
@@ -85,6 +99,45 @@ public class VoiceAgentController(GigahooDbContext db) : ControllerBase
         };
 
         db.Conversations.Add(conversation);
+
+        // Meter minutes for this call, rounding UP to the next whole minute.
+        account.MinutesUsed += (int)Math.Ceiling(request.DurationSeconds / 60.0);
+
+        var remaining = (account.Plan?.IncludedMinutes ?? 0) - account.MinutesUsed;
+
+        // Notify the owner once per billing period when they first cross their limit.
+        if (remaining <= 0 && account.LimitNotifiedAt is null)
+        {
+            var ownerPhone = account.PhoneNumber ?? account.ForwardingPhone;
+            if (!string.IsNullOrWhiteSpace(ownerPhone))
+            {
+                try
+                {
+                    await smsProvider.SendAsync(
+                        ownerPhone,
+                        "Your Gigahoo AI receptionist has used all included minutes for this period. Upgrade to keep answering calls.");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send minutes-exhausted SMS for account {Account}", account.Id);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(account.Email))
+            {
+                try
+                {
+                    await email.SendMinutesExhaustedAsync(account.Email, account.BusinessName ?? "there");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send minutes-exhausted email for account {Account}", account.Id);
+                }
+            }
+
+            account.LimitNotifiedAt = DateTime.UtcNow;
+        }
+
         await db.SaveChangesAsync();
 
         return Ok(new { conversationId = conversation.Id });
@@ -106,7 +159,9 @@ public record VoiceAgentAccountResponse(
     string? Region,
     string? PostalCode,
     string Country,
-    VoiceAgentFeatureSettings Features
+    VoiceAgentFeatureSettings Features,
+    int MinutesRemaining,
+    bool CanAnswer
 );
 
 public record VoiceAgentFeatureSettings(

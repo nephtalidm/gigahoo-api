@@ -1,5 +1,4 @@
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
+using Gigahoo.Api.Services.Providers;
 
 namespace Gigahoo.Api.Services;
 
@@ -8,23 +7,14 @@ public interface ISmsService
     Task SendVerificationCodeAsync(string phoneNumber, string code);
 }
 
-public class SmsService(IConfiguration config, ILogger<SmsService> logger) : ISmsService
+/// <summary>
+/// OTP delivery. The actual carrier send is routed through the configured
+/// <see cref="ISmsProvider"/> so OTP and general SMS share one provider.
+/// </summary>
+public class SmsService(ISmsProvider smsProvider) : ISmsService
 {
-    public async Task SendVerificationCodeAsync(string phoneNumber, string code)
-    {
-        try
-        {
-            TwilioClient.Init(config["Twilio:AccountSid"], config["Twilio:AuthToken"]);
-
-            await MessageResource.CreateAsync(
-                body: $"Your Gigahoo verification code is: {code}. It expires in 10 minutes.",
-                from: new Twilio.Types.PhoneNumber(config["Twilio:FromNumber"]!),
-                to: new Twilio.Types.PhoneNumber(phoneNumber)
-            );
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send SMS to {Phone}", phoneNumber);
-        }
-    }
+    public Task SendVerificationCodeAsync(string phoneNumber, string code)
+        => smsProvider.SendAsync(
+            phoneNumber,
+            $"Your Gigahoo verification code is: {code}. It expires in 10 minutes.");
 }

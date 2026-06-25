@@ -1,16 +1,19 @@
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Entities;
+using Gigahoo.Api.Services.Providers;
 using Microsoft.EntityFrameworkCore;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
-using Twilio.Rest.Api.V2010.Account.AvailablePhoneNumberCountry;
-using TwilioPhoneNumber = Twilio.Types.PhoneNumber;
 
 namespace Gigahoo.Api.Services;
 
+/// <summary>
+/// Number lifecycle service. Carrier operations are delegated to the configured
+/// <see cref="ITelephonyProvider"/>; this service owns the DB pool / assignment
+/// bookkeeping. (Name kept as ITwilioService for backwards compatibility with
+/// existing callers; the actual carrier is provider-selectable via config.)
+/// </summary>
 public interface ITwilioService
 {
-    Task<string?> PurchasePhoneNumberAsync(string countryCode);
+    Task<PurchasedPhoneNumber?> PurchasePhoneNumberAsync(string countryCode);
     Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl);
     Task ReleasePhoneNumberAsync(string phoneNumberSid);
     Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode);
@@ -18,80 +21,16 @@ public interface ITwilioService
     Task ReleaseNumberFromAccountAsync(Guid accountId);
 }
 
-public class TwilioService(IConfiguration config, GigahooDbContext db) : ITwilioService
+public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony) : ITwilioService
 {
-    private readonly string _accountSid = config["Twilio:AccountSid"]!;
-    private readonly string _authToken = config["Twilio:AuthToken"]!;
+    public Task<PurchasedPhoneNumber?> PurchasePhoneNumberAsync(string countryCode)
+        => telephony.PurchaseAsync(countryCode, areaCode: null);
 
-    public async Task<string?> PurchasePhoneNumberAsync(string countryCode)
-    {
-        try
-        {
-            TwilioClient.Init(_accountSid, _authToken);
+    public Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl)
+        => telephony.ConfigureVoiceWebhookAsync(phoneNumberSid, webhookUrl);
 
-            // Search for available phone numbers
-            var availableNumbers = await LocalResource.ReadAsync(
-                pathCountryCode: countryCode,
-                limit: 10
-            );
-
-            if (!availableNumbers.Any())
-            {
-                return null;
-            }
-
-            // Pick the first available number
-            var selectedNumber = availableNumbers.First();
-
-            // Purchase the number
-            var purchasedNumber = await IncomingPhoneNumberResource.CreateAsync(
-                phoneNumber: selectedNumber.PhoneNumber,
-                voiceUrl: new Uri("https://example.com/voice"), // Temporary, will be updated
-                voiceMethod: "POST"
-            );
-
-            return purchasedNumber.Sid;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error purchasing phone number: {ex.Message}");
-            return null;
-        }
-    }
-
-    public async Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl)
-    {
-        try
-        {
-            TwilioClient.Init(_accountSid, _authToken);
-
-            await IncomingPhoneNumberResource.UpdateAsync(
-                pathSid: phoneNumberSid,
-                voiceUrl: new Uri(webhookUrl),
-                voiceMethod: "POST"
-            );
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error configuring webhook: {ex.Message}");
-            throw;
-        }
-    }
-
-    public async Task ReleasePhoneNumberAsync(string phoneNumberSid)
-    {
-        try
-        {
-            TwilioClient.Init(_accountSid, _authToken);
-
-            await IncomingPhoneNumberResource.DeleteAsync(pathSid: phoneNumberSid);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error releasing phone number: {ex.Message}");
-            throw;
-        }
-    }
+    public Task ReleasePhoneNumberAsync(string phoneNumberSid)
+        => telephony.ReleaseAsync(phoneNumberSid);
 
     public async Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode)
     {
@@ -114,6 +53,10 @@ public class TwilioService(IConfiguration config, GigahooDbContext db) : ITwilio
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Release the account's number. Calls the carrier to actually de-provision the
+    /// number, then flips the pool record back to Available.
+    /// </summary>
     public async Task ReleaseNumberFromAccountAsync(Guid accountId)
     {
         var phoneNumber = await db.PhoneNumbers
@@ -121,7 +64,10 @@ public class TwilioService(IConfiguration config, GigahooDbContext db) : ITwilio
 
         if (phoneNumber != null)
         {
-            phoneNumber.Status = Entities.PhoneNumberStatus.Available;
+            // Actually de-provision at the carrier before flipping DB status.
+            await telephony.ReleaseAsync(phoneNumber.Sid);
+
+            phoneNumber.Status = Entities.PhoneNumberStatus.Released;
             phoneNumber.AssignedAccountId = null;
             phoneNumber.ReleasedAt = DateTime.UtcNow;
             phoneNumber.UpdatedAt = DateTime.UtcNow;

@@ -9,6 +9,7 @@ public interface IEmailService
     Task SendMagicLinkAsync(string toEmail, string magicLink);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
+    Task SendMinutesExhaustedAsync(string toEmail, string businessName);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -161,6 +162,77 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                     <li>Configure your business details in the dashboard</li>
                 </ol>
                 <p style="color: #6b7280; font-size: 14px;">Need help? Contact us at support@gigahoo.com</p>
+            </body>
+            </html>
+            """;
+
+        message.Body = new TextPart("html") { Text = body };
+        await SendAsync(message);
+    }
+
+    public async Task SendMinutesExhaustedAsync(string toEmail, string businessName)
+    {
+        var message = new MimeMessage();
+        message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        message.To.Add(MailboxAddress.Parse(toEmail));
+        message.Subject = "You've used all your included Gigahoo minutes";
+
+        var upgradeUrl = $"{config["Frontend:Url"] ?? "https://gigahoo.ai"}/dashboard/billing";
+
+        var body = $$"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f9fafb;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 0;">
+                    <tr>
+                        <td align="center">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden;">
+                                <!-- Header -->
+                                <tr>
+                                    <td style="padding: 32px 40px 0; text-align: center;">
+                                        <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; background-color: #2563eb; text-align: center;">
+                                            <span style="color: white; font-size: 24px; font-weight: bold;">G</span>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Body -->
+                                <tr>
+                                    <td style="padding: 24px 40px 32px;">
+                                        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">You're out of minutes</h1>
+                                        <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4b5563; text-align: center;">
+                                            Hi {{businessName}}, your AI receptionist has used all the calling minutes included in your current plan for this billing period.
+                                            New incoming calls won't be answered until your minutes reset or you upgrade.
+                                        </p>
+
+                                        <!-- CTA Button -->
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td align="center" style="padding-bottom: 16px;">
+                                                    <a href="{{upgradeUrl}}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">Upgrade your plan</a>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <p style="margin: 16px 0 0; font-size: 13px; color: #9ca3af; text-align: center;">
+                                            Your minutes will automatically reset at the start of your next billing period.
+                                        </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="padding: 24px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+                                        <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                                            &copy; {DateTime.UtcNow.Year} Gigahoo. All rights reserved.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
             </body>
             </html>
             """;

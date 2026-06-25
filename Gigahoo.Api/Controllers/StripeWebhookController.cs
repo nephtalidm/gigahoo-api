@@ -1,6 +1,7 @@
 using Gigahoo.Api.Data;
 using Gigahoo.Api.Entities;
 using Gigahoo.Api.Services;
+using Gigahoo.Api.Services.Providers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Stripe;
@@ -14,6 +15,8 @@ public class StripeWebhookController(
     IConfiguration config,
     ILogger<StripeWebhookController> logger,
     ITwilioService twilio,
+    ITelephonyProvider telephony,
+    ISmsProvider smsProvider,
     IEmailService email) : ControllerBase
 {
     [HttpPost]
@@ -80,7 +83,11 @@ public class StripeWebhookController(
             if (plan is not null)
                 account.PlanId = plan.Id;
 
+            // Initialize the billing period and reset usage metering for the new subscription.
             account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
+            account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
+            account.MinutesUsed = 0;
+            account.LimitNotifiedAt = null;
             account.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -110,6 +117,13 @@ public class StripeWebhookController(
             CreatedAt = DateTime.UtcNow,
         });
 
+        // Renewal: a paid invoice starts a fresh billing period — reset usage metering.
+        account.MinutesUsed = 0;
+        account.LimitNotifiedAt = null;
+        account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
+        account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
+        account.UpdatedAt = DateTime.UtcNow;
+
         // Provision phone number if not already done and email is verified
         if (string.IsNullOrEmpty(account.PhoneNumberSid) && account.IsEmailConfirmed)
         {
@@ -122,30 +136,26 @@ public class StripeWebhookController(
                 
                 if (phoneNumber == null)
                 {
-                    // No available number in pool, purchase a new one
-                    var phoneNumberSid = await twilio.PurchasePhoneNumberAsync(countryCode);
-                    
-                    if (phoneNumberSid is not null)
+                    // No available number in pool, purchase a new one via the configured carrier.
+                    var purchased = await twilio.PurchasePhoneNumberAsync(countryCode);
+
+                    if (purchased is not null)
                     {
-                        // Get the phone number details from Twilio
-                        Twilio.TwilioClient.Init(config["Twilio:AccountSid"]!, config["Twilio:AuthToken"]!);
-                        var twilioNumber = await Twilio.Rest.Api.V2010.Account.IncomingPhoneNumberResource.FetchAsync(phoneNumberSid);
-                        
                         // Add to pool
                         phoneNumber = new Entities.PhoneNumber
                         {
-                            Sid = phoneNumberSid,
-                            Number = twilioNumber.PhoneNumber.ToString(),
+                            Sid = purchased.Sid,
+                            Number = purchased.PhoneNumber,
                             CountryCode = countryCode,
-                            Provider = "twilio",
+                            Provider = telephony.ProviderName,
                             Status = Entities.PhoneNumberStatus.Available,
                             MonthlyCost = 1.15m,
                             PurchasedAt = DateTime.UtcNow
                         };
                         db.PhoneNumbers.Add(phoneNumber);
                         await db.SaveChangesAsync();
-                        
-                        logger.LogInformation("Purchased new phone number {Number} and added to pool", twilioNumber.PhoneNumber);
+
+                        logger.LogInformation("Purchased new phone number {Number} and added to pool", purchased.PhoneNumber);
                     }
                     else
                     {
@@ -176,6 +186,20 @@ public class StripeWebhookController(
                         logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.Id);
                     }
 
+                    // Also notify the owner by SMS.
+                    var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+                    if (!string.IsNullOrWhiteSpace(ownerPhone))
+                    {
+                        try
+                        {
+                            await smsProvider.SendAsync(ownerPhone, $"Your new Gigahoo number is {phoneNumber.Number}");
+                        }
+                        catch (Exception smsEx)
+                        {
+                            logger.LogError(smsEx, "Failed to send phone number SMS to account {Account}", account.Id);
+                        }
+                    }
+
                     logger.LogInformation("Assigned phone number {Number} to account {Account}", phoneNumber.Number, account.Id);
                 }
             }
@@ -204,11 +228,27 @@ public class StripeWebhookController(
 
         if (subscription.Status == "active")
         {
-            var period = subscription.CurrentPeriodEnd;
-            if (period != default)
+            var periodStart = subscription.CurrentPeriodStart;
+            var periodEnd = subscription.CurrentPeriodEnd;
+
+            // Detect the start of a new billing period and reset usage metering.
+            if (periodStart != default)
             {
-                account.BillingPeriodEnd = DateOnly.FromDateTime(period);
+                var newStart = DateOnly.FromDateTime(periodStart);
+                if (account.BillingPeriodStart != newStart)
+                {
+                    account.BillingPeriodStart = newStart;
+                    account.MinutesUsed = 0;
+                    account.LimitNotifiedAt = null;
+                }
             }
+
+            if (periodEnd != default)
+            {
+                account.BillingPeriodEnd = DateOnly.FromDateTime(periodEnd);
+            }
+
+            account.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
         }
     }

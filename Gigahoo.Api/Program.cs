@@ -63,10 +63,28 @@ try
     builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IEmailService, EmailService>();
-    builder.Services.AddScoped<ISmsService, SmsService>();
     builder.Services.AddScoped<IStripeService, StripeService>();
     builder.Services.AddScoped<ITwilioService, TwilioService>();
     builder.Services.AddScoped<IPhoneNumberCleanupService, PhoneNumberCleanupService>();
+
+    // HttpClient factory (used by Telnyx providers)
+    builder.Services.AddHttpClient();
+
+    // Telephony + SMS providers (config-selectable: Twilio | Telnyx)
+    var telephonyProvider = builder.Configuration["Telephony:Provider"] ?? "Twilio";
+    if (string.Equals(telephonyProvider, "Telnyx", StringComparison.OrdinalIgnoreCase))
+        builder.Services.AddScoped<Gigahoo.Api.Services.Providers.ITelephonyProvider, Gigahoo.Api.Services.Providers.TelnyxTelephonyProvider>();
+    else
+        builder.Services.AddScoped<Gigahoo.Api.Services.Providers.ITelephonyProvider, Gigahoo.Api.Services.Providers.TwilioTelephonyProvider>();
+
+    var smsProvider = builder.Configuration["Sms:Provider"] ?? "Twilio";
+    if (string.Equals(smsProvider, "Telnyx", StringComparison.OrdinalIgnoreCase))
+        builder.Services.AddScoped<Gigahoo.Api.Services.Providers.ISmsProvider, Gigahoo.Api.Services.Providers.TelnyxSmsProvider>();
+    else
+        builder.Services.AddScoped<Gigahoo.Api.Services.Providers.ISmsProvider, Gigahoo.Api.Services.Providers.TwilioSmsProvider>();
+
+    // OTP delivery (delegates to ISmsProvider)
+    builder.Services.AddScoped<ISmsService, SmsService>();
 
     // Background services
     builder.Services.AddHostedService<PhoneNumberCleanupBackgroundService>();

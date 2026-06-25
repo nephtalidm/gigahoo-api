@@ -42,6 +42,7 @@ public class Account
     public DateOnly? BillingPeriodStart { get; set; }
     public DateOnly? BillingPeriodEnd { get; set; }
     public int MinutesUsed { get; set; }
+    public DateTime? LimitNotifiedAt { get; set; }
 
     // Feature settings (Business plan only)
     public bool AnswerQuestions { get; set; }
