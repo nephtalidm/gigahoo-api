@@ -16,11 +16,24 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
+    public DbSet<PlanPrice> PlanPrices => Set<PlanPrice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Plan
         modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.Id);
+
+        // PlanPrice (one row per plan x currency)
+        modelBuilder.Entity<PlanPrice>(e =>
+        {
+            e.ToTable("PlanPrice");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.StripePriceId).HasMaxLength(255);
+            e.Property(x => x.Amount).HasPrecision(10, 2);
+            e.HasIndex(x => new { x.PlanId, x.Currency }).IsUnique();
+            e.HasOne(x => x.Plan).WithMany(p => p.Prices).HasForeignKey(x => x.PlanId);
+        });
 
         // BusinessCategory
         modelBuilder.Entity<BusinessCategory>().ToTable("BusinessCategory").HasKey(e => e.Id);
@@ -32,6 +45,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Code).IsUnique();
             e.Property(x => x.Code).IsFixedLength().HasMaxLength(2);
+            e.Property(x => x.Currency).HasMaxLength(3);
         });
 
         // Language

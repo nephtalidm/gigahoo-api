@@ -80,8 +80,20 @@ public class BillingController(
             await db.SaveChangesAsync();
         }
 
-        var priceId = config[$"Stripe:PriceIds:{request.PlanId}"];
-        if (string.IsNullOrEmpty(priceId)) return BadRequest(new { error = "No Stripe price configured for this plan" });
+        // Billing currency is fully data-driven: read it from the Country table
+        // (no hardcoded country->currency mapping or default currency in code).
+        var country = account.CountryCodeId is short cid ? await db.Countries.FindAsync(cid) : null;
+        country ??= await db.Countries.FirstOrDefaultAsync(c => c.Code == account.PhoneCountryCode);
+        var currency = country?.Currency?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(currency))
+            return BadRequest(new { error = "Could not determine a billing currency for this account's country" });
+
+        // Price comes from the PlanPrice table for that currency. If it isn't set up,
+        // fail explicitly rather than defaulting to a currency.
+        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.IsActive);
+        if (planPrice is null || string.IsNullOrEmpty(planPrice.StripePriceId))
+            return BadRequest(new { error = $"No Stripe price configured for plan '{plan.Name}' in {currency}" });
+        var priceId = planPrice.StripePriceId;
 
         var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing?session_id={{CHECKOUT_SESSION_ID}}";
         var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";

@@ -8,4 +8,5 @@ public class Plan
     public int IncludedMinutes { get; set; }
     public bool HasOptionalFeatures { get; set; }
     public bool IsActive { get; set; }
+    public ICollection<PlanPrice> Prices { get; set; } = [];
 }
