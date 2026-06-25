@@ -15,7 +15,9 @@ namespace Gigahoo.Api.Controllers;
 public class AccountController(
     GigahooDbContext db,
     IJwtTokenService jwt,
-    IGoogleAuthService googleAuth) : ControllerBase
+    IGoogleAuthService googleAuth,
+    IStripeService stripe,
+    ILogger<AccountController> logger) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
@@ -66,6 +68,21 @@ public class AccountController(
         account.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+
+        // Create the Stripe customer at signup so the id lives on the account
+        // (used by checkout for paid plans). Best-effort — never block signup.
+        if (string.IsNullOrEmpty(account.StripeCustomerId))
+        {
+            try
+            {
+                account.StripeCustomerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName);
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.Id);
+            }
+        }
 
         var token = jwt.GenerateAccessToken(account);
         var expiresAt = DateTime.UtcNow.AddDays(7);
