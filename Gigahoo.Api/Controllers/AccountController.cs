@@ -65,6 +65,14 @@ public class AccountController(
         account.Email = request.Email;
         account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.PlanId = request.PlanId;
+        account.AddressLine1 = request.AddressLine1;
+        account.AddressLine2 = request.AddressLine2;
+        account.City = request.City;
+        account.RegionCustom = request.Region;
+        account.PostalCode = request.PostalCode;
+        // Resolve the business country (ISO-2) to its Country id. Leave null if
+        // unknown — never fail signup over an unrecognized code.
+        account.CountryCodeId = (await db.Countries.FirstOrDefaultAsync(c => c.Code == request.CountryCode))?.Id;
         account.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();

@@ -22,6 +22,26 @@ public record CreateAccountRequest
     [Required]
     public byte PlanId { get; init; }
 
+    [Required, MaxLength(200)]
+    public string AddressLine1 { get; init; } = default!;
+
+    [MaxLength(200)]
+    public string? AddressLine2 { get; init; }
+
+    [Required, MaxLength(100)]
+    public string City { get; init; } = default!;
+
+    // Free-text state/province/region; maps to Account.RegionCustom.
+    [Required, MaxLength(100)]
+    public string Region { get; init; } = default!;
+
+    [Required, MaxLength(20)]
+    public string PostalCode { get; init; } = default!;
+
+    // ISO-2 of the business/address country; resolved to Account.CountryCodeId.
+    [Required, MaxLength(2)]
+    public string CountryCode { get; init; } = default!;
+
     // Optional: Google (OAuth) accounts don't need a password. Required for
     // email/SMS signups (enforced in the controller).
     [MinLength(8), MaxLength(128)]
