@@ -143,7 +143,7 @@ public class AccountController(
                     var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
                     if (!string.IsNullOrEmpty(ownerPhone))
                     {
-                        try { await sms.SendAsync(ownerPhone, $"Your new Gigahoo number is {number.Number}"); }
+                        try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo! Hi {account.BusinessName}, your dedicated phone number is ready to receive calls: {number.Number}. Next steps: 1) Forward your existing business calls to this number, 2) Test the AI receptionist by calling the number yourself, 3) Configure your business details in the dashboard. Need help? Contact us at support@gigahoo.com"); }
                         catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
                     }
                 }
