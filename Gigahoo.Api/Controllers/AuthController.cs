@@ -82,7 +82,9 @@ public class AuthController(
         var frontendUrl = config["Frontend:Url"] ?? "http://localhost:3000";
         var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
 
-        await email.SendMagicLinkAsync(request.Email, link);
+        // Existing account => sign-in copy; otherwise sign-up copy.
+        var exists = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        await email.SendMagicLinkAsync(request.Email, link, exists ? VerificationPurpose.SignIn : VerificationPurpose.SignUp);
         logger.LogInformation("Magic link sent to {Email}", request.Email);
 
         return Ok(new { message = "If an account exists, a magic link has been sent." });

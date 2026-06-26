@@ -131,3 +131,36 @@ public record SetPasswordRequest
     [Required, MinLength(8), MaxLength(128)]
     public string NewPassword { get; init; } = default!;
 }
+
+public record RequestEmailChangeRequest
+{
+    [Required, EmailAddress, MaxLength(254)]
+    public string NewEmail { get; init; } = default!;
+}
+
+public record ConfirmEmailChangeRequest
+{
+    [Required, EmailAddress, MaxLength(254)]
+    public string NewEmail { get; init; } = default!;
+
+    [Required, MaxLength(10)]
+    public string Code { get; init; } = default!;
+}
+
+public record RequestPhoneChangeRequest
+{
+    [Required, MaxLength(30)]
+    public string NewPhone { get; init; } = default!;
+}
+
+public record ConfirmPhoneChangeRequest
+{
+    [Required, MaxLength(30)]
+    public string NewPhone { get; init; } = default!;
+
+    [MaxLength(5)]
+    public string? PhoneCountryCode { get; init; }
+
+    [Required, MaxLength(10)]
+    public string Code { get; init; } = default!;
+}

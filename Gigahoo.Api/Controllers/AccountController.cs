@@ -22,6 +22,7 @@ public class AccountController(
     ITelephonyProvider telephony,
     IEmailService email,
     ISmsProvider sms,
+    IOtpService otp,
     IConfiguration config,
     ILogger<AccountController> logger) : ControllerBase
 {
@@ -280,6 +281,92 @@ public class AccountController(
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Google linked" });
+    }
+
+    [HttpPost("email/request-change")]
+    public async Task<IActionResult> RequestEmailChange([FromBody] RequestEmailChangeRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var newEmail = request.NewEmail.Trim();
+        if (string.IsNullOrEmpty(newEmail) || !newEmail.Contains('@'))
+            return BadRequest(new { error = "Enter a valid email address" });
+
+        var normalized = newEmail.ToLowerInvariant();
+        if (normalized == account.NormalizedEmail)
+            return BadRequest(new { error = "This is already your email address" });
+
+        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.Id != accountId);
+        if (taken) return Conflict(new { error = "This email is already registered" });
+
+        var code = await otp.GenerateAndStoreAsync(newEmail, "EmailChange", TimeSpan.FromMinutes(15));
+        await email.SendEmailChangeCodeAsync(newEmail, code);
+        logger.LogInformation("Email change code sent for account {Account}", accountId);
+
+        return Ok(new { message = "Verification code sent." });
+    }
+
+    [HttpPost("email/confirm-change")]
+    public async Task<IActionResult> ConfirmEmailChange([FromBody] ConfirmEmailChangeRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var newEmail = request.NewEmail.Trim();
+        var normalized = newEmail.ToLowerInvariant();
+        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.Id != accountId);
+        if (taken) return Conflict(new { error = "This email is already registered" });
+
+        var valid = await otp.VerifyAsync(newEmail, "EmailChange", request.Code);
+        if (!valid) return BadRequest(new { error = "Invalid or expired code" });
+
+        account.Email = newEmail;
+        account.NormalizedEmail = normalized;
+        account.IsEmailConfirmed = true;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Email updated" });
+    }
+
+    [HttpPost("phone/request-change")]
+    public async Task<IActionResult> RequestPhoneChange([FromBody] RequestPhoneChangeRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var newPhone = request.NewPhone.Trim();
+        if (string.IsNullOrEmpty(newPhone))
+            return BadRequest(new { error = "Enter a valid phone number" });
+
+        var code = await otp.GenerateAndStoreAsync(newPhone, "PhoneChange", TimeSpan.FromMinutes(10));
+        await sms.SendAsync(newPhone, $"Your Gigahoo verification code is {code}");
+        logger.LogInformation("Phone change code sent for account {Account}", accountId);
+
+        return Ok(new { message = "Verification code sent." });
+    }
+
+    [HttpPost("phone/confirm-change")]
+    public async Task<IActionResult> ConfirmPhoneChange([FromBody] ConfirmPhoneChangeRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var valid = await otp.VerifyAsync(request.NewPhone, "PhoneChange", request.Code);
+        if (!valid) return BadRequest(new { error = "Invalid or expired code" });
+
+        account.BusinessPhone = request.NewPhone.Trim();
+        if (!string.IsNullOrEmpty(request.PhoneCountryCode))
+            account.PhoneCountryCode = request.PhoneCountryCode;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Phone updated" });
     }
 
     private async Task<AccountResponse> MapToResponse(Account account)

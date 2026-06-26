@@ -4,9 +4,12 @@ using MimeKit;
 
 namespace Gigahoo.Api.Services;
 
+public enum VerificationPurpose { SignIn, SignUp, EmailChange }
+
 public interface IEmailService
 {
-    Task SendMagicLinkAsync(string toEmail, string magicLink);
+    Task SendMagicLinkAsync(string toEmail, string magicLink, VerificationPurpose purpose = VerificationPurpose.SignIn);
+    Task SendEmailChangeCodeAsync(string toEmail, string code);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
@@ -14,12 +17,22 @@ public interface IEmailService
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
 {
-    public async Task SendMagicLinkAsync(string toEmail, string magicLink)
+    public async Task SendMagicLinkAsync(string toEmail, string magicLink, VerificationPurpose purpose = VerificationPurpose.SignIn)
     {
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = "Your Gigahoo verification code";
+        // Copy differs by purpose so sign-up and sign-in emails don't read the same.
+        var (subject, heading, intro, buttonLabel) = purpose switch
+        {
+            VerificationPurpose.SignUp => (
+                "Welcome to Gigahoo — confirm your email", "Confirm your email",
+                "Welcome to Gigahoo! Enter the code below to confirm your email and finish setting up your account.", "Confirm email"),
+            _ => (
+                "Sign in to Gigahoo", "Sign in to Gigahoo",
+                "Enter the code below to sign in to your Gigahoo account.", "Sign in"),
+        };
+        message.Subject = subject;
 
         // Extract the 6-digit code from the URL
         var code = "------";
@@ -53,9 +66,9 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                 <!-- Body -->
                                 <tr>
                                     <td style="padding: 24px 40px 32px;">
-                                        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">Verify your email</h1>
+                                        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">{{heading}}</h1>
                                         <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4b5563; text-align: center;">
-                                            Use the code below to verify your email and continue setting up your account.
+                                            {{intro}}
                                         </p>
 
                                         <!-- Code Display -->
@@ -73,7 +86,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                                             <tr>
                                                 <td align="center" style="padding-bottom: 16px;">
-                                                    <a href="{{magicLink}}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">Verify Email</a>
+                                                    <a href="{{magicLink}}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px;">{{buttonLabel}}</a>
                                                 </td>
                                             </tr>
                                         </table>
@@ -107,6 +120,49 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                             </table>
                         </td>
                     </tr>
+                </table>
+            </body>
+            </html>
+            """;
+
+        message.Body = new TextPart("html") { Text = body };
+        await SendAsync(message);
+    }
+
+    public async Task SendEmailChangeCodeAsync(string toEmail, string code)
+    {
+        var message = new MimeMessage();
+        message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        message.To.Add(MailboxAddress.Parse(toEmail));
+        message.Subject = "Confirm your new Gigahoo email address";
+
+        var body = $$"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f9fafb;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:40px 0;">
+                    <tr><td align="center">
+                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;">
+                            <tr><td style="padding:32px 40px 0;text-align:center;">
+                                <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height:auto;max-width:180px;" />
+                            </td></tr>
+                            <tr><td style="padding:24px 40px 32px;">
+                                <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#111827;text-align:center;">Confirm your new email</h1>
+                                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4b5563;text-align:center;">
+                                    Enter the code below in Settings to confirm this as the new email address for your Gigahoo account. If you didn't request this change, you can safely ignore this email.
+                                </p>
+                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                                    <td align="center" style="padding-bottom:24px;">
+                                        <div style="display:inline-block;background-color:#f3f4f6;border-radius:8px;padding:16px 24px;">
+                                            <span style="font-family:'Courier New',monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#111827;user-select:all;">{{code}}</span>
+                                        </div>
+                                    </td>
+                                </tr></table>
+                                <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;">This code expires in 15 minutes and can only be used once.</p>
+                            </td></tr>
+                        </table>
+                    </td></tr>
                 </table>
             </body>
             </html>
