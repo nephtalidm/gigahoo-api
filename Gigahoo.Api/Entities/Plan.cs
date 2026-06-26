@@ -7,6 +7,7 @@ public class Plan
     public decimal PriceMonthly { get; set; }
     public int IncludedMinutes { get; set; }
     public bool HasOptionalFeatures { get; set; }
+    public int? MaxConcurrentCalls { get; set; }      // simultaneous live calls allowed (NULL = unlimited; Free/Starter = 1)
     public bool IsActive { get; set; }
     public ICollection<PlanPrice> Prices { get; set; } = [];
 }

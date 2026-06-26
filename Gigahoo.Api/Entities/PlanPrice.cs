@@ -11,5 +11,6 @@ public class PlanPrice
     public string? StripePriceId { get; set; }       // recurring price id from Stripe (set later)
     public decimal Amount { get; set; }              // display amount in that currency
     public bool IsActive { get; set; } = true;
+    public DateTime? ReplacedOn { get; set; }         // when this price was last replaced (NULL = never; auto-stamped by a DB trigger)
     public Plan Plan { get; set; } = null!;
 }

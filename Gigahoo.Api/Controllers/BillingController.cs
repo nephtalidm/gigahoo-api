@@ -65,6 +65,40 @@ public class BillingController(
         return Ok(result);
     }
 
+    // Public, per-currency plan prices for the marketing site's pricing section.
+    // Anonymous (like /api/countries/supported) and rendered server-side so the
+    // homepage shows the visitor's currency with no client-fetch flicker.
+    //
+    // Currency resolution is fully data-driven: Country.Currency for the given
+    // code (ANY country, including coming-soon markets), falling back to the US
+    // row's currency, then "USD". Each active plan's amount comes from PlanPrice
+    // for that currency (0 for free plans), falling back to Plan.PriceMonthly.
+    [HttpGet("public-prices")]
+    [AllowAnonymous]
+    public async Task<ActionResult<PublicPricesResponse>> GetPublicPrices([FromQuery] string? code)
+    {
+        var match = await db.Countries.FirstOrDefaultAsync(c => c.Code == (code ?? ""));
+        var currency = (match?.Currency
+            ?? (await db.Countries.FirstOrDefaultAsync(c => c.Code == "US"))?.Currency)
+            ?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(currency)) currency = "USD";
+
+        var plans = await db.Plans.Where(p => p.IsActive).ToListAsync();
+        var prices = await db.PlanPrices
+            .Where(pp => pp.Currency == currency && pp.IsActive)
+            .ToListAsync();
+
+        var result = plans.Select(p =>
+        {
+            decimal amount = p.PriceMonthly == 0
+                ? 0m
+                : prices.FirstOrDefault(pp => pp.PlanId == p.Id)?.Amount ?? p.PriceMonthly;
+            return new PublicPlanPrice(p.Name, amount);
+        }).ToList();
+
+        return Ok(new PublicPricesResponse(currency, result));
+    }
+
     [HttpPost("checkout")]
     public async Task<ActionResult<CheckoutResponse>> CreateCheckout([FromBody] CheckoutRequest request)
     {
@@ -212,3 +246,5 @@ public class BillingController(
 
 public record CheckoutRequest(byte PlanId);
 public record CheckoutResponse(string Url);
+public record PublicPlanPrice(string Slug, decimal Amount);
+public record PublicPricesResponse(string Currency, List<PublicPlanPrice> Plans);
