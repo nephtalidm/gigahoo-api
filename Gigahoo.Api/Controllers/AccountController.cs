@@ -2,6 +2,7 @@ using Gigahoo.Api.Data;
 using Gigahoo.Api.Dtos;
 using Gigahoo.Api.Entities;
 using Gigahoo.Api.Services;
+using Gigahoo.Api.Services.Providers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,11 @@ public class AccountController(
     IJwtTokenService jwt,
     IGoogleAuthService googleAuth,
     IStripeService stripe,
+    ITwilioService twilio,
+    ITelephonyProvider telephony,
+    IEmailService email,
+    ISmsProvider sms,
+    IConfiguration config,
     ILogger<AccountController> logger) : ControllerBase
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
@@ -93,6 +99,58 @@ public class AccountController(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.Id);
+            }
+        }
+
+        // Free plan provisions a number + welcome right here (paid plans do it via
+        // checkout + the invoice.paid webhook). Best-effort — never block signup.
+        var plan = await db.Plans.FindAsync(account.PlanId);
+        if (plan is not null && plan.PriceMonthly == 0 && string.IsNullOrEmpty(account.PhoneNumberSid))
+        {
+            account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
+            account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
+            var countryCode = account.CountryCodeId is short ccid && await db.Countries.FindAsync(ccid) is { } co
+                ? co.Code : account.PhoneCountryCode;
+            try
+            {
+                var number = await twilio.GetAvailableNumberAsync(countryCode);
+                if (number is null)
+                {
+                    var purchased = await twilio.PurchasePhoneNumberAsync(countryCode);
+                    if (purchased is not null)
+                    {
+                        number = new PhoneNumber
+                        {
+                            Sid = purchased.Sid, Number = purchased.PhoneNumber, CountryCode = countryCode,
+                            Provider = telephony.ProviderName, Status = PhoneNumberStatus.Available,
+                            MonthlyCost = 1.15m, PurchasedAt = DateTime.UtcNow
+                        };
+                        db.PhoneNumbers.Add(number);
+                        await db.SaveChangesAsync();
+                    }
+                }
+                if (number is not null)
+                {
+                    await twilio.AssignNumberToAccountAsync(number, account.Id);
+                    account.PhoneNumberSid = number.Sid;
+                    account.TelephonyProvider = number.Provider;
+                    account.ForwardingPhone = number.Number;
+                    await twilio.ConfigureWebhookAsync(number.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}");
+                    await db.SaveChangesAsync();
+
+                    try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, number.Number); }
+                    catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.Id); }
+                    var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+                    if (!string.IsNullOrEmpty(ownerPhone))
+                    {
+                        try { await sms.SendAsync(ownerPhone, $"Your new Gigahoo number is {number.Number}"); }
+                        catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Free plan number provisioning failed for account {Account}", account.Id);
             }
         }
 
