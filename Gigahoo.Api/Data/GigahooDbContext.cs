@@ -18,6 +18,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
     public DbSet<PlanPrice> PlanPrices => Set<PlanPrice>();
     public DbSet<Domain> Domains => Set<Domain>();
+    public DbSet<Setting> Settings => Set<Setting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,14 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasKey(x => x.Host);
             e.Property(x => x.Host).HasMaxLength(100);
             e.Property(x => x.CountryCode).HasMaxLength(2);
+        });
+
+        // Setting (general website key/value settings)
+        modelBuilder.Entity<Setting>(e =>
+        {
+            e.ToTable("Setting");
+            e.HasKey(x => x.SettingKey);
+            e.Property(x => x.SettingKey).HasMaxLength(100);
         });
 
         // Language
