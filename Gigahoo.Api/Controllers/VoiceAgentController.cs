@@ -36,6 +36,21 @@ public class VoiceAgentController(
         var minutesRemaining = (account.Plan?.IncludedMinutes ?? 0) - account.MinutesUsed;
         var canAnswer = minutesRemaining > 0;
 
+        // Greeting precedence: account's custom greeting, then the site-wide
+        // DefaultGreeting setting, then a hard-coded fallback.
+        var greetingMessage = account.GreetingMessage;
+        if (string.IsNullOrWhiteSpace(greetingMessage))
+        {
+            greetingMessage = await db.Settings
+                .Where(s => s.SettingKey == "DefaultGreeting")
+                .Select(s => s.SettingValue)
+                .FirstOrDefaultAsync();
+        }
+        if (string.IsNullOrWhiteSpace(greetingMessage))
+        {
+            greetingMessage = "Hi, thanks for calling! How can I help you today?";
+        }
+
         string? regionName = null;
         if (account.RegionId.HasValue)
         {
@@ -70,7 +85,9 @@ public class VoiceAgentController(
                 account.PricePerKm
             ),
             minutesRemaining,
-            canAnswer
+            canAnswer,
+            greetingMessage,
+            account.AgentVoice
         ));
     }
 
@@ -199,7 +216,9 @@ public record VoiceAgentAccountResponse(
     string Country,
     VoiceAgentFeatureSettings Features,
     int MinutesRemaining,
-    bool CanAnswer
+    bool CanAnswer,
+    string GreetingMessage,
+    string? AgentVoice
 );
 
 public record VoiceAgentFeatureSettings(

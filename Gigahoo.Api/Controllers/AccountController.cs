@@ -433,7 +433,7 @@ public class AccountController(
     // The voices the AI receptionist can speak with (Qwen). Keep in sync with the
     // dashboard voice picker and the /public/voice-samples/<id>.mp3 sample files.
     private static readonly HashSet<string> AllowedAgentVoices =
-        new(StringComparer.OrdinalIgnoreCase) { "cherry", "ethan", "chelsie", "serena" };
+        new(StringComparer.OrdinalIgnoreCase) { "Tina", "Ethan", "Jennifer", "Ryan", "Aiden", "Cindy", "Raymond" };
 
     [HttpPut("voice-settings")]
     public async Task<ActionResult<VoiceSettingsResponse>> UpdateVoiceSettings([FromBody] UpdateVoiceSettingsRequest request)
