@@ -144,12 +144,15 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = $"Your Gigahoo phone number is ready: {phoneNumber}";
+        message.Subject = $"Welcome to Gigahoo! Your phone number is: {phoneNumber}";
 
         var body = $"""
             <html>
-            <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Your AI Receptionist Phone Number</h2>
+            <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px 16px;">
+                <div style="text-align: center; padding-bottom: 16px;">
+                    <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height: auto; max-width: 180px;" />
+                </div>
+                <h2>Welcome to Gigahoo!</h2>
                 <p>Hi {businessName},</p>
                 <p>Your dedicated phone number has been provisioned and is ready to receive calls:</p>
                 <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center;">
