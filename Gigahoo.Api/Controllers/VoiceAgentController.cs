@@ -140,6 +140,44 @@ public class VoiceAgentController(
 
         await db.SaveChangesAsync();
 
+        // Best-effort post-call summary to the owner per their notification settings.
+        // Each channel is isolated in try/catch so a delivery failure never fails the call save.
+        if (account.EmailCallNotifications && !string.IsNullOrWhiteSpace(account.Email))
+        {
+            try
+            {
+                await email.SendCallSummaryAsync(
+                    account.Email,
+                    account.BusinessName ?? "there",
+                    request.CallerName,
+                    request.CallerPhone,
+                    request.DurationSeconds,
+                    request.Summary);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send call-summary email for account {Account}", account.Id);
+            }
+        }
+
+        if (account.SmsCallNotifications)
+        {
+            var ownerPhone = account.PhoneNumber ?? account.ForwardingPhone;
+            if (!string.IsNullOrWhiteSpace(ownerPhone))
+            {
+                try
+                {
+                    var mmss = $"{request.DurationSeconds / 60}:{request.DurationSeconds % 60:D2}";
+                    var text = $"New Gigahoo call — {request.CallerName ?? "Unknown"} ({request.CallerPhone}), {mmss} min.\n{request.Summary}";
+                    await smsProvider.SendAsync(ownerPhone, text);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send call-summary SMS for account {Account}", account.Id);
+                }
+            }
+        }
+
         return Ok(new { conversationId = conversation.Id });
     }
 }

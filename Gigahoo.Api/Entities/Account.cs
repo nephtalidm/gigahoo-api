@@ -44,6 +44,10 @@ public class Account
     public int MinutesUsed { get; set; }
     public DateTime? LimitNotifiedAt { get; set; }
 
+    // Per-account post-call notification preferences (owner gets a summary per call).
+    public bool EmailCallNotifications { get; set; } = true;
+    public bool SmsCallNotifications { get; set; } = true;
+
     // Feature settings (Business plan only)
     public bool AnswerQuestions { get; set; }
     public string? ServicesInfo { get; set; }

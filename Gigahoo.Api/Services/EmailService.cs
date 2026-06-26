@@ -13,6 +13,8 @@ public interface IEmailService
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
+    Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, int durationSeconds, string? summary);
+    Task SendAdminAlertAsync(string subject, string message);
 }
 
 public class EmailService(IConfiguration config, ILogger<EmailService> logger) : IEmailService
@@ -170,6 +172,16 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
+    public async Task SendAdminAlertAsync(string subject, string message)
+    {
+        var email = new MimeMessage();
+        email.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        email.To.Add(MailboxAddress.Parse("admin@gigahoo.ai"));
+        email.Subject = $"[Gigahoo Alert] {subject}";
+        email.Body = new TextPart("plain") { Text = message };
+        await SendAsync(email);
+    }
+
     public async Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message)
     {
         var email = new MimeMessage();
@@ -273,6 +285,86 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                         <p style="margin: 16px 0 0; font-size: 13px; color: #9ca3af; text-align: center;">
                                             Your minutes will automatically reset at the start of your next billing period.
                                         </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="padding: 24px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+                                        <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                                            &copy; {DateTime.UtcNow.Year} Gigahoo. All rights reserved.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            """;
+
+        message.Body = new TextPart("html") { Text = body };
+        await SendAsync(message);
+    }
+
+    public async Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, int durationSeconds, string? summary)
+    {
+        var message = new MimeMessage();
+        message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        message.To.Add(MailboxAddress.Parse(toEmail));
+
+        var caller = string.IsNullOrWhiteSpace(callerName) ? callerPhone : callerName;
+        message.Subject = $"New call summary — {caller}";
+
+        var duration = $"{durationSeconds / 60}:{durationSeconds % 60:D2}";
+        var callerNameDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(callerName) ? "Unknown" : callerName);
+        var callerPhoneDisplay = System.Net.WebUtility.HtmlEncode(callerPhone);
+        var summaryDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(summary) ? "No summary available." : summary);
+
+        var body = $$"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f9fafb;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 0;">
+                    <tr>
+                        <td align="center">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden;">
+                                <!-- Header -->
+                                <tr>
+                                    <td style="padding: 32px 40px 0; text-align: center;">
+                                        <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height: auto; max-width: 180px;" />
+                                    </td>
+                                </tr>
+
+                                <!-- Body -->
+                                <tr>
+                                    <td style="padding: 24px 40px 32px;">
+                                        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">New call summary</h1>
+                                        <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4b5563; text-align: center;">
+                                            Hi {{businessName}}, your AI receptionist just handled a call. Here are the details.
+                                        </p>
+
+                                        <!-- Call details -->
+                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; border-radius: 8px; margin-bottom: 24px;">
+                                            <tr>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; width: 120px;">Caller</td>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600;">{{callerNameDisplay}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">Phone</td>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{callerPhoneDisplay}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">Duration</td>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{duration}} min</td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- Summary -->
+                                        <h2 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #111827;">Summary</h2>
+                                        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #4b5563; white-space: pre-wrap;">{{summaryDisplay}}</p>
                                     </td>
                                 </tr>
 

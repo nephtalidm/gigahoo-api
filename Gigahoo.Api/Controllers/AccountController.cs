@@ -86,29 +86,16 @@ public class AccountController(
         // unknown — never fail signup over an unrecognized code.
         account.CountryCodeId = (await db.Countries.FirstOrDefaultAsync(c => c.Code == request.CountryCode))?.Id;
         account.UpdatedAt = DateTime.UtcNow;
+        // NOTE: deliberately NOT saving the account yet. For free signups we persist
+        // the account only once a phone number has actually been provisioned.
 
-        await db.SaveChangesAsync();
-
-        // Create the Stripe customer at signup so the id lives on the account
-        // (used by checkout for paid plans). Best-effort — never block signup.
-        if (string.IsNullOrEmpty(account.StripeCustomerId))
-        {
-            try
-            {
-                account.StripeCustomerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName);
-                await db.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.Id);
-            }
-        }
-
-        // Free plan provisions a number + welcome right here (paid plans do it via
-        // checkout + the invoice.paid webhook). Best-effort — never block signup.
         var plan = await db.Plans.FindAsync(account.PlanId);
-        if (plan is not null && plan.PriceMonthly == 0 && string.IsNullOrEmpty(account.PhoneNumberSid))
+
+        if (plan is not null && plan.PriceMonthly == 0)
         {
+            // FREE plan: provision a number FIRST. If none can be provisioned we alert
+            // admin, delete the (auth-created) account, and fail the signup — no
+            // account record is kept for a customer we can't give a number.
             account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
             account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
             var countryCode = account.CountryCodeId is short ccid && await db.Countries.FindAsync(ccid) is { } co
@@ -138,22 +125,52 @@ public class AccountController(
                     account.TelephonyProvider = number.Provider;
                     account.ForwardingPhone = number.Number;
                     await twilio.ConfigureWebhookAsync(number.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}");
-                    await db.SaveChangesAsync();
-
-                    try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, number.Number); }
-                    catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.Id); }
-                    var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
-                    if (!string.IsNullOrEmpty(ownerPhone))
-                    {
-                        try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{number.Number}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at support@gigahoo.com"); }
-                        catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
-                    }
                 }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Free plan number provisioning failed for account {Account}", account.Id);
             }
+
+            if (string.IsNullOrEmpty(account.PhoneNumberSid))
+            {
+                try
+                {
+                    await email.SendAdminAlertAsync(
+                        "Signup failed — no phone number available",
+                        $"Could not provision a phone number for a new free-plan signup.\n\nAccount: {account.Id}\nBusiness: {account.BusinessName}\nEmail: {account.Email}\nCountry: {countryCode}\nWhen: {DateTime.UtcNow:u}");
+                }
+                catch (Exception ex) { logger.LogError(ex, "Failed to send admin alert for provisioning failure {Account}", account.Id); }
+
+                // No number — delete the auth-created account; keep no record.
+                db.Accounts.Remove(account);
+                await db.SaveChangesAsync();
+
+                return BadRequest(new { error = "We couldn't set up a phone number for your account right now. Our team has been notified — please try again shortly or contact support@gigahoo.com." });
+            }
+
+            // Number provisioned — persist the account + assignment, then welcome.
+            await db.SaveChangesAsync();
+
+            try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, account.ForwardingPhone!); }
+            catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.Id); }
+            var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+            if (!string.IsNullOrEmpty(ownerPhone))
+            {
+                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at support@gigahoo.com"); }
+                catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
+            }
+        }
+        else
+        {
+            // PAID plan: create the Stripe customer (best-effort), then persist. The
+            // phone number is provisioned at checkout / the invoice.paid webhook.
+            if (plan is not null && string.IsNullOrEmpty(account.StripeCustomerId))
+            {
+                try { account.StripeCustomerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName); }
+                catch (Exception ex) { logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.Id); }
+            }
+            await db.SaveChangesAsync();
         }
 
         var token = jwt.GenerateAccessToken(account);
@@ -371,6 +388,31 @@ public class AccountController(
         return Ok(new { message = "Phone updated" });
     }
 
+    [HttpGet("notifications")]
+    public async Task<ActionResult<CallNotificationsResponse>> GetNotifications()
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
+    }
+
+    [HttpPut("notifications")]
+    public async Task<IActionResult> UpdateNotifications([FromBody] UpdateCallNotificationsRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        account.EmailCallNotifications = request.EmailCallNotifications;
+        account.SmsCallNotifications = request.SmsCallNotifications;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
+    }
+
     private async Task<AccountResponse> MapToResponse(Account account)
     {
         var plan = account.Plan ?? await db.Plans.FindAsync(account.PlanId);
@@ -420,7 +462,9 @@ public class AccountController(
             account.CreatedAt,
             account.PasswordHash is not null,
             account.GoogleSubjectId is not null,
-            account.PasswordHash is not null && account.GoogleSubjectId is null && !account.IsPhoneConfirmed
+            account.PasswordHash is not null && account.GoogleSubjectId is null && !account.IsPhoneConfirmed,
+            account.EmailCallNotifications,
+            account.SmsCallNotifications
         );
     }
 }

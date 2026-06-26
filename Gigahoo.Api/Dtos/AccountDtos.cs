@@ -123,8 +123,22 @@ public record AccountResponse(
     DateTime CreatedAt,
     bool HasPassword,
     bool HasGoogle,
-    bool RequiresCurrentPassword
+    bool RequiresCurrentPassword,
+    bool EmailCallNotifications,
+    bool SmsCallNotifications
 );
+
+public record CallNotificationsResponse(
+    bool EmailCallNotifications,
+    bool SmsCallNotifications
+);
+
+public record UpdateCallNotificationsRequest
+{
+    public bool EmailCallNotifications { get; init; }
+
+    public bool SmsCallNotifications { get; init; }
+}
 
 public record SetPasswordRequest
 {
