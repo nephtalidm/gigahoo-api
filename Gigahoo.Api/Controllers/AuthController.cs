@@ -181,8 +181,19 @@ public class AuthController(
         // their own number instead of creating a duplicate account).
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == normalizedPhone);
         if (account is null && last10.Length == 10)
-            account = await db.Accounts.FirstOrDefaultAsync(a =>
-                a.NormalizedPhone == null && a.BusinessPhone != null && a.BusinessPhone.EndsWith(last10));
+        {
+            // No auth-phone match — link to an account whose BUSINESS phone is the
+            // same number. Compare on digits in memory so phone formatting (spaces,
+            // dashes, +1, etc.) never matters.
+            var candidates = await db.Accounts
+                .Where(a => a.NormalizedPhone == null && a.BusinessPhone != null)
+                .ToListAsync();
+            account = candidates.FirstOrDefault(a =>
+            {
+                var bd = new string(a.BusinessPhone!.Where(char.IsDigit).ToArray());
+                return bd.Length >= 10 && bd[^10..] == last10;
+            });
+        }
         var isNew = account is null;
 
         if (isNew)
