@@ -6,12 +6,20 @@ public record SendMagicLinkRequest
 {
     [Required, EmailAddress, MaxLength(254)]
     public string Email { get; init; } = default!;
+
+    // Selected market (ISO-2). Used to gate new-account signups from non-supported regions.
+    [MaxLength(2)]
+    public string? Country { get; init; }
 }
 
 public record SendSmsCodeRequest
 {
     [Required, MaxLength(20)]
     public string PhoneNumber { get; init; } = default!;
+
+    // Selected market (ISO-2). Used to gate new-account signups from non-supported regions.
+    [MaxLength(2)]
+    public string? Country { get; init; }
 }
 
 public record VerifySmsCodeRequest

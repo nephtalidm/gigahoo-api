@@ -125,8 +125,24 @@ public record AccountResponse(
     bool HasGoogle,
     bool RequiresCurrentPassword,
     bool EmailCallNotifications,
-    bool SmsCallNotifications
+    bool SmsCallNotifications,
+    string? GreetingMessage,
+    string? AgentVoice
 );
+
+public record VoiceSettingsResponse(
+    string? Greeting,
+    string? AgentVoice
+);
+
+public record UpdateVoiceSettingsRequest
+{
+    [MaxLength(500)]
+    public string? GreetingMessage { get; init; }
+
+    [MaxLength(50)]
+    public string? AgentVoice { get; init; }
+}
 
 public record CallNotificationsResponse(
     bool EmailCallNotifications,

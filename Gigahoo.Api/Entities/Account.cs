@@ -48,6 +48,10 @@ public class Account
     public bool EmailCallNotifications { get; set; } = true;
     public bool SmsCallNotifications { get; set; } = true;
 
+    // AI voice agent settings: custom call greeting + selected Qwen voice (NULL = default).
+    public string? GreetingMessage { get; set; }
+    public string? AgentVoice { get; set; }
+
     // Feature settings (Business plan only)
     public bool AnswerQuestions { get; set; }
     public string? ServicesInfo { get; set; }

@@ -78,12 +78,21 @@ public class AuthController(
     [HttpPost("magic-link")]
     public async Task<IActionResult> SendMagicLink([FromBody] SendMagicLinkRequest request)
     {
+        // Existing account => sign-in copy; otherwise sign-up copy.
+        var exists = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+
+        // Block NEW-account signups from non-supported / coming-soon markets. Existing
+        // accounts (login) always proceed.
+        if (!string.IsNullOrEmpty(request.Country) && !exists &&
+            !await db.Countries.AnyAsync(c => c.Code == request.Country && c.IsSupported))
+        {
+            return StatusCode(403, new { error = "region_signup_restricted" });
+        }
+
         var code = await otp.GenerateAndStoreAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(15));
         var frontendUrl = config["Frontend:Url"] ?? "http://localhost:3000";
         var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
 
-        // Existing account => sign-in copy; otherwise sign-up copy.
-        var exists = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
         await email.SendMagicLinkAsync(request.Email, link, exists ? VerificationPurpose.SignIn : VerificationPurpose.SignUp);
         logger.LogInformation("Magic link sent to {Email}", request.Email);
 
@@ -161,6 +170,19 @@ public class AuthController(
     [HttpPost("sms/send")]
     public async Task<IActionResult> SendSmsCode([FromBody] SendSmsCodeRequest request)
     {
+        // Whether an account already owns this phone, using the same NormalizedPhone
+        // lookup that sms/verify uses.
+        var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
+        var exists = await db.Accounts.AnyAsync(a => a.NormalizedPhone == normalizedPhone);
+
+        // Block NEW-account signups from non-supported / coming-soon markets. Existing
+        // accounts (login) always proceed.
+        if (!string.IsNullOrEmpty(request.Country) && !exists &&
+            !await db.Countries.AnyAsync(c => c.Code == request.Country && c.IsSupported))
+        {
+            return StatusCode(403, new { error = "region_signup_restricted" });
+        }
+
         var code = await otp.GenerateAndStoreAsync(request.PhoneNumber, "SmsVerification", TimeSpan.FromMinutes(10));
         await sms.SendVerificationCodeAsync(request.PhoneNumber, code);
         logger.LogInformation("SMS code sent to {Phone}", request.PhoneNumber);

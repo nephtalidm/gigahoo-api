@@ -430,6 +430,34 @@ public class AccountController(
         return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
     }
 
+    // The voices the AI receptionist can speak with (Qwen). Keep in sync with the
+    // dashboard voice picker and the /public/voice-samples/<id>.mp3 sample files.
+    private static readonly HashSet<string> AllowedAgentVoices =
+        new(StringComparer.OrdinalIgnoreCase) { "cherry", "ethan", "chelsie", "serena" };
+
+    [HttpPut("voice-settings")]
+    public async Task<ActionResult<VoiceSettingsResponse>> UpdateVoiceSettings([FromBody] UpdateVoiceSettingsRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        var greeting = string.IsNullOrWhiteSpace(request.GreetingMessage) ? null : request.GreetingMessage.Trim();
+        if (greeting is not null && greeting.Length > 500)
+            return BadRequest(new { error = "Greeting must be 500 characters or fewer." });
+
+        var agentVoice = string.IsNullOrWhiteSpace(request.AgentVoice) ? null : request.AgentVoice.Trim();
+        if (agentVoice is not null && !AllowedAgentVoices.Contains(agentVoice))
+            return BadRequest(new { error = "Unknown voice selection." });
+
+        account.GreetingMessage = greeting;
+        account.AgentVoice = agentVoice;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice));
+    }
+
     private async Task<AccountResponse> MapToResponse(Account account)
     {
         var plan = account.Plan ?? await db.Plans.FindAsync(account.PlanId);
@@ -481,7 +509,9 @@ public class AccountController(
             account.GoogleSubjectId is not null,
             account.PasswordHash is not null && account.GoogleSubjectId is null && !account.IsPhoneConfirmed,
             account.EmailCallNotifications,
-            account.SmsCallNotifications
+            account.SmsCallNotifications,
+            account.GreetingMessage,
+            account.AgentVoice
         );
     }
 }
