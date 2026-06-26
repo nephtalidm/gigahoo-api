@@ -243,9 +243,11 @@ public class AccountController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
         if (account is null) return NotFound();
 
-        // Changing an existing password requires the current one. Setting a
-        // password for the first time (e.g. a Google account) does not.
-        if (account.PasswordHash is not null)
+        // Require the current password only when the password is the account's sole
+        // credential. Accounts that can also sign in via Google or SMS can always
+        // re-authenticate, so they may (re)set a password without the old one.
+        var hasAlternateAuth = account.GoogleSubjectId is not null || account.IsPhoneConfirmed;
+        if (account.PasswordHash is not null && !hasAlternateAuth)
         {
             if (string.IsNullOrEmpty(request.CurrentPassword) ||
                 !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, account.PasswordHash))
@@ -417,7 +419,8 @@ public class AccountController(
             account.MinutesUsed,
             account.CreatedAt,
             account.PasswordHash is not null,
-            account.GoogleSubjectId is not null
+            account.GoogleSubjectId is not null,
+            account.PasswordHash is not null && account.GoogleSubjectId is null && !account.IsPhoneConfirmed
         );
     }
 }

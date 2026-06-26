@@ -122,7 +122,8 @@ public record AccountResponse(
     int MinutesUsed,
     DateTime CreatedAt,
     bool HasPassword,
-    bool HasGoogle
+    bool HasGoogle,
+    bool RequiresCurrentPassword
 );
 
 public record SetPasswordRequest
