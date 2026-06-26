@@ -123,7 +123,19 @@ try
         options.AddPolicy("Frontend", policy =>
         {
             var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-            policy.WithOrigins(origins)
+            // Allowed: configured origins (e.g. localhost for dev) plus every
+            // Gigahoo regional domain and its www host (.ai/.ca/.com/.mx/.com.mx).
+            var gigahooDomains = new[] { "gigahoo.ai", "gigahoo.ca", "gigahoo.com", "gigahoo.mx", "gigahoo.com.mx" };
+            policy.SetIsOriginAllowed(origin =>
+                  {
+                      if (origins.Contains(origin)) return true;
+                      try
+                      {
+                          var host = new Uri(origin).Host.ToLowerInvariant();
+                          return gigahooDomains.Any(d => host == d || host == "www." + d);
+                      }
+                      catch { return false; }
+                  })
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials();
