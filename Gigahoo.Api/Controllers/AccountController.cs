@@ -146,7 +146,7 @@ public class AccountController(
                 db.Accounts.Remove(account);
                 await db.SaveChangesAsync();
 
-                return BadRequest(new { error = "We couldn't set up a phone number for your account right now. Our team has been notified — please try again shortly or contact support@gigahoo.com." });
+                return BadRequest(new { error = "We couldn't set up a phone number for your account right now. Our team has been notified — please try again shortly or contact contact@gigahoo.ai." });
             }
 
             // Number provisioned — persist the account + assignment, then welcome.
@@ -157,7 +157,7 @@ public class AccountController(
             var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
             if (!string.IsNullOrEmpty(ownerPhone))
             {
-                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at support@gigahoo.com"); }
+                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
                 catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
             }
         }

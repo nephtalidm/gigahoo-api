@@ -186,7 +186,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
     {
         var email = new MimeMessage();
         email.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
-        email.To.Add(MailboxAddress.Parse("support@gigahoo.com"));
+        email.To.Add(MailboxAddress.Parse("contact@gigahoo.ai"));
         email.Subject = $"[Contact] {subject}";
 
         var body = $"""
@@ -230,7 +230,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                     <li>Test the AI receptionist by calling the number yourself</li>
                     <li>Configure your business details in the dashboard</li>
                 </ol>
-                <p style="color: #6b7280; font-size: 14px;">Need help? Contact us at support@gigahoo.com</p>
+                <p style="color: #6b7280; font-size: 14px;">Need help? Contact us at contact@gigahoo.ai</p>
             </body>
             </html>
             """;
