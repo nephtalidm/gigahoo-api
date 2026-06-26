@@ -57,9 +57,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                 <!-- Header -->
                                 <tr>
                                     <td style="padding: 32px 40px 0; text-align: center;">
-                                        <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; background-color: #2563eb; text-align: center;">
-                                            <span style="color: white; font-size: 24px; font-weight: bold;">G</span>
-                                        </div>
+                                        <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height: auto; max-width: 180px;" />
                                     </td>
                                 </tr>
 
@@ -206,7 +204,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             <html>
             <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px 16px;">
                 <div style="text-align: center; padding-bottom: 16px;">
-                    <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="270" style="height: auto; max-width: 270px;" />
+                    <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="405" style="height: auto; max-width: 405px;" />
                 </div>
                 <h2>Welcome to Gigahoo!</h2>
                 <p>Hi {businessName},</p>
@@ -250,9 +248,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                 <!-- Header -->
                                 <tr>
                                     <td style="padding: 32px 40px 0; text-align: center;">
-                                        <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; background-color: #2563eb; text-align: center;">
-                                            <span style="color: white; font-size: 24px; font-weight: bold;">G</span>
-                                        </div>
+                                        <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height: auto; max-width: 180px;" />
                                     </td>
                                 </tr>
 

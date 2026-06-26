@@ -111,6 +111,7 @@ public record AccountResponse(
     string? AddressLine2,
     string? City,
     string? Region,
+    short? RegionId,
     string? PostalCode,
     string Country,
     short CountryId,
