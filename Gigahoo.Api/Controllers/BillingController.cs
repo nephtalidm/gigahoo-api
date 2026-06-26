@@ -91,9 +91,11 @@ public class BillingController(
         if (string.IsNullOrEmpty(currency))
             return BadRequest(new { error = "Could not determine a billing currency for this account's country" });
 
-        // Defense-in-depth: Gigahoo is currently only available in the US and Canada.
-        var billingCountryCode = (country?.Code ?? account.PhoneCountryCode)?.ToUpperInvariant();
-        if (billingCountryCode is not ("US" or "CA"))
+        // Defense-in-depth: Gigahoo only serves countries flagged IsSupported in the
+        // Country table. Validate the resolved billing country against that flag.
+        var billingCountryCode = (country?.Code ?? account.PhoneCountryCode)?.Trim();
+        var billingCountrySupported = await db.Countries.AnyAsync(c => c.Code == billingCountryCode && c.IsSupported);
+        if (!billingCountrySupported)
             return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
 
         // Price comes from the PlanPrice table for that currency. If it isn't set up,

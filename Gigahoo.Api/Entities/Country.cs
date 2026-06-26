@@ -8,4 +8,5 @@ public class Country
     public string DialCode { get; set; } = null!;
     public string? Flag { get; set; }
     public string? Currency { get; set; }   // ISO 4217 billing currency, e.g. "USD", "MXN", "CAD"
+    public bool IsSupported { get; set; }    // Whether Gigahoo currently serves this country
 }

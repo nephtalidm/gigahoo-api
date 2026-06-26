@@ -76,9 +76,10 @@ public class AccountController(
         account.City = request.City;
         account.RegionCustom = request.Region;
         account.PostalCode = request.PostalCode;
-        // Gigahoo is currently only available in the US and Canada — reject any
-        // other business country before saving.
-        if (request.CountryCode?.ToUpperInvariant() is not ("US" or "CA"))
+        // Gigahoo only serves countries flagged IsSupported in the Country table —
+        // reject any other business country before saving.
+        var supported = await db.Countries.AnyAsync(c => c.Code == request.CountryCode && c.IsSupported);
+        if (!supported)
             return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
         // Resolve the business country (ISO-2) to its Country id. Leave null if
         // unknown — never fail signup over an unrecognized code.
@@ -143,7 +144,7 @@ public class AccountController(
                     var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
                     if (!string.IsNullOrEmpty(ownerPhone))
                     {
-                        try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo! Hi {account.BusinessName}, your dedicated phone number is ready to receive calls: {number.Number}. Next steps: 1) Forward your existing business calls to this number, 2) Test the AI receptionist by calling the number yourself, 3) Configure your business details in the dashboard. Need help? Contact us at support@gigahoo.com"); }
+                        try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{number.Number}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at support@gigahoo.com"); }
                         catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
                     }
                 }
