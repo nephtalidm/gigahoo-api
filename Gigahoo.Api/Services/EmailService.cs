@@ -150,7 +150,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             <html>
             <body style="font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px 16px;">
                 <div style="text-align: center; padding-bottom: 16px;">
-                    <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height: auto; max-width: 180px;" />
+                    <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="270" style="height: auto; max-width: 270px;" />
                 </div>
                 <h2>Welcome to Gigahoo!</h2>
                 <p>Hi {businessName},</p>

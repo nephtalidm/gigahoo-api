@@ -173,7 +173,16 @@ public class AuthController(
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
+        var digits = new string(request.PhoneNumber.Where(char.IsDigit).ToArray());
+        var last10 = digits.Length >= 10 ? digits[^10..] : digits;
+
+        // Match the auth phone first; otherwise link to an existing account whose
+        // BUSINESS phone is the same number (so a Google/email user can sign in with
+        // their own number instead of creating a duplicate account).
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == normalizedPhone);
+        if (account is null && last10.Length == 10)
+            account = await db.Accounts.FirstOrDefaultAsync(a =>
+                a.NormalizedPhone == null && a.BusinessPhone != null && a.BusinessPhone.EndsWith(last10));
         var isNew = account is null;
 
         if (isNew)
@@ -193,6 +202,7 @@ public class AuthController(
         {
             account.LastLoginAt = DateTime.UtcNow;
             account.IsPhoneConfirmed = true;
+            account.NormalizedPhone ??= normalizedPhone; // link for next time
         }
 
         await db.SaveChangesAsync();

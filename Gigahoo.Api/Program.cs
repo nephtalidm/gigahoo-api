@@ -92,19 +92,21 @@ try
     // Rate limiting
     builder.Services.AddRateLimiter(options =>
     {
+        // Rate limiting effectively disabled for now (very high limit, no queue so
+        // requests never wait). Re-tighten these when going to real production volume.
         options.AddFixedWindowLimiter("api", config =>
         {
             config.Window = TimeSpan.FromMinutes(1);
-            config.PermitLimit = 100;
-            config.QueueLimit = 10;
+            config.PermitLimit = 1_000_000;
+            config.QueueLimit = 0;
             config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         });
 
         options.AddFixedWindowLimiter("auth", config =>
         {
-            config.Window = TimeSpan.FromMinutes(15);
-            config.PermitLimit = 10;
-            config.QueueLimit = 2;
+            config.Window = TimeSpan.FromMinutes(1);
+            config.PermitLimit = 1_000_000;
+            config.QueueLimit = 0;
             config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         });
 
