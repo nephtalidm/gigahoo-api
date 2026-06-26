@@ -173,25 +173,26 @@ public class AuthController(
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
-        var digits = new string(request.PhoneNumber.Where(char.IsDigit).ToArray());
-        var last10 = digits.Length >= 10 ? digits[^10..] : digits;
+        var incomingDigits = new string(request.PhoneNumber.Where(char.IsDigit).ToArray());
 
-        // Match the auth phone first; otherwise link to an existing account whose
-        // BUSINESS phone is the same number (so a Google/email user can sign in with
-        // their own number instead of creating a duplicate account).
+        // Match the auth phone first; otherwise link to an account whose BUSINESS
+        // phone is the same FULL number — its local digits plus its country's dial
+        // code — compared as full E.164 digits, so the same local number in two
+        // different countries can never collide.
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == normalizedPhone);
-        if (account is null && last10.Length == 10)
+        if (account is null && incomingDigits.Length >= 8)
         {
-            // No auth-phone match — link to an account whose BUSINESS phone is the
-            // same number. Compare on digits in memory so phone formatting (spaces,
-            // dashes, +1, etc.) never matters.
+            var dialByCountry = await db.Countries
+                .ToDictionaryAsync(c => c.Code, c => new string(c.DialCode.Where(char.IsDigit).ToArray()));
             var candidates = await db.Accounts
                 .Where(a => a.NormalizedPhone == null && a.BusinessPhone != null)
                 .ToListAsync();
             account = candidates.FirstOrDefault(a =>
             {
-                var bd = new string(a.BusinessPhone!.Where(char.IsDigit).ToArray());
-                return bd.Length >= 10 && bd[^10..] == last10;
+                var bizDigits = new string(a.BusinessPhone!.Where(char.IsDigit).ToArray());
+                var dial = dialByCountry.TryGetValue(a.PhoneCountryCode, out var d) ? d : "";
+                // Business phone may be stored with or without the country code.
+                return incomingDigits == dial + bizDigits || incomingDigits == bizDigits;
             });
         }
         var isNew = account is null;
