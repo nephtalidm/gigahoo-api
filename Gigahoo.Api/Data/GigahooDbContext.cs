@@ -17,6 +17,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
     public DbSet<PlanPrice> PlanPrices => Set<PlanPrice>();
+    public DbSet<Domain> Domains => Set<Domain>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +47,15 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasIndex(x => x.Code).IsUnique();
             e.Property(x => x.Code).IsFixedLength().HasMaxLength(2);
             e.Property(x => x.Currency).HasMaxLength(3);
+        });
+
+        // Domain (regional domain host -> optional forced country)
+        modelBuilder.Entity<Domain>(e =>
+        {
+            e.ToTable("Domain");
+            e.HasKey(x => x.Host);
+            e.Property(x => x.Host).HasMaxLength(100);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
         });
 
         // Language

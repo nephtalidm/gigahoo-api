@@ -118,21 +118,25 @@ try
     });
 
     // CORS
+    // The allowed Gigahoo domain hosts come from the DB (the Domain table is the
+    // single source of truth). The list is loaded ONCE at startup (after the app
+    // is built, below) and captured by the policy predicate.
+    var gigahooDomains = new List<string>();
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("Frontend", policy =>
         {
             var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
             // Allowed: configured origins (e.g. localhost for dev) plus every
-            // Gigahoo regional domain and its www host (.ai/.ca/.com/.mx/.com.mx).
-            var gigahooDomains = new[] { "gigahoo.ai", "gigahoo.ca", "gigahoo.com", "gigahoo.mx", "gigahoo.com.mx" };
+            // Gigahoo regional domain and its www host (loaded from the DB).
             policy.SetIsOriginAllowed(origin =>
                   {
                       if (origins.Contains(origin)) return true;
                       try
                       {
                           var host = new Uri(origin).Host.ToLowerInvariant();
-                          return gigahooDomains.Any(d => host == d || host == "www." + d);
+                          if (host.StartsWith("www.")) host = host[4..];
+                          return gigahooDomains.Contains(host);
                       }
                       catch { return false; }
                   })
@@ -193,6 +197,16 @@ try
     });
 
     var app = builder.Build();
+
+    // Load the Gigahoo regional domain hosts from the DB ONCE at startup so the
+    // CORS predicate (registered above) can allow those origins. Strip a leading
+    // "www." so the predicate's www-stripped host comparison matches.
+    using (var scope = app.Services.CreateScope())
+    {
+        var domainDb = scope.ServiceProvider.GetRequiredService<GigahooDbContext>();
+        var hosts = await domainDb.Domains.Select(d => d.Host).ToListAsync();
+        gigahooDomains.AddRange(hosts.Select(h => h.ToLowerInvariant().StartsWith("www.") ? h.ToLowerInvariant()[4..] : h.ToLowerInvariant()));
+    }
 
     // Middleware pipeline
     if (app.Environment.IsDevelopment())

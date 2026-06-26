@@ -369,6 +369,11 @@ public class AccountController(
         if (string.IsNullOrEmpty(newPhone))
             return BadRequest(new { error = "Enter a valid phone number" });
 
+        // US/CA share +1; only the NANP area code distinguishes them. Reject a new
+        // phone whose area code doesn't match the account's stored phone country.
+        if (!NanpAreaCodes.MatchesCountry(newPhone, account.PhoneCountryCode))
+            return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
+
         var code = await otp.GenerateAndStoreAsync(newPhone, "PhoneChange", TimeSpan.FromMinutes(10));
         await sms.SendAsync(newPhone, $"Your Gigahoo verification code is {code}");
         logger.LogInformation("Phone change code sent for account {Account}", accountId);
@@ -382,6 +387,11 @@ public class AccountController(
         var accountId = GetAccountId();
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
         if (account is null) return NotFound();
+
+        // Authoritative area-code gate: re-check before applying the change, using
+        // the account's stored phone country (US/CA disambiguation under +1).
+        if (!NanpAreaCodes.MatchesCountry(request.NewPhone, account.PhoneCountryCode))
+            return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
 
         var valid = await otp.VerifyAsync(request.NewPhone, "PhoneChange", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
