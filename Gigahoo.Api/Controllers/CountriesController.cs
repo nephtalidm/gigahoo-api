@@ -21,13 +21,14 @@ public class CountriesController(GigahooDbContext db) : ControllerBase
             .ToListAsync());
     }
 
-    // The visitor's pricing currency, taken from Country.Currency in the DB. A
-    // served country uses its own currency; anyone else falls back to the default
-    // market (US)'s currency. No currency is hardcoded — it always comes from data.
+    // The visitor's pricing currency, taken from Country.Currency in the DB — for
+    // ANY country (including coming-soon markets like Mexico -> MXN), not just
+    // signup-supported ones. Unknown countries fall back to the default market
+    // (US)'s currency. No currency is hardcoded — it always comes from data.
     [HttpGet("currency")]
     public async Task<ActionResult> GetCurrency([FromQuery] string? code)
     {
-        var match = await db.Countries.FirstOrDefaultAsync(c => c.Code == (code ?? "") && c.IsSupported);
+        var match = await db.Countries.FirstOrDefaultAsync(c => c.Code == (code ?? ""));
         var currency = match?.Currency
             ?? (await db.Countries.FirstOrDefaultAsync(c => c.Code == "US"))?.Currency;
         return Ok(new { currency });
