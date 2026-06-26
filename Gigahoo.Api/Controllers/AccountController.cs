@@ -52,6 +52,13 @@ public class AccountController(
         var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.Id != accountId);
         if (phoneTaken) return Conflict(new { error = "This phone number is already in use" });
 
+        // US and Canada share the +1 country code, so the area code (first 3
+        // digits) is the only thing that distinguishes them. Reject a phone whose
+        // NANP area code doesn't belong to the selected phone country. This is the
+        // authoritative gate — it rejects even if the frontend check is bypassed.
+        if (!NanpAreaCodes.MatchesCountry(request.BusinessPhone, request.PhoneCountryCode))
+            return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
+
         // Password is required only for plain-email signups. SMS and Google are
         // passwordless (a password can be added later in Settings).
         var isEmailMethod = account.GoogleSubjectId is null && !account.IsPhoneConfirmed;
