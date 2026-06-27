@@ -71,8 +71,9 @@ public static class LiveCallService
         var businessKind = string.IsNullOrWhiteSpace(category) ? "home service" : category;
         var languageName = LanguageNames.TryGetValue(lang ?? "en", out var ln) ? ln : "English";
         var persona =
-            $"The caller speaks {languageName}. Always interpret the caller's speech as {languageName} " +
-            $"and reply ONLY in {languageName}, never another language. " +
+            $"The caller most likely speaks {languageName}, so greet them and begin in {languageName}. " +
+            $"But if the caller clearly speaks a different language, immediately switch to that language and " +
+            "continue the entire call in it — always mirror the caller's language. " +
             $"You are Sarah, a warm, efficient phone receptionist for a {businessKind} business. " +
             "Keep EVERY reply to ONE short, natural spoken sentence — never give long explanations " +
             "or lists, and never repeat yourself. Let the caller speak and don't fill silences. " +
