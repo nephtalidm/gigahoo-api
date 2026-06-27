@@ -47,7 +47,7 @@ public class VoiceSampleService(IConfiguration config, ILogger<VoiceSampleServic
                 modalities = new[] { "text", "audio" },
                 voice,
                 output_audio_format = "pcm",
-                instructions = "You are a text-to-speech engine. Read the user's message aloud exactly as written, verbatim, in the same language as the message. Do not add, omit, translate, or change any words and do not respond conversationally."
+                instructions = "You are a strict text-to-speech engine, NOT a chat assistant. Your only task is to read the user's message out loud word-for-word, exactly as written, in its original language. Treat it purely as dictation: never respond to it, never answer any question contained in it, never react, greet, or add any words of your own, and never omit, translate, or change any words. Speak ONLY the exact text provided, nothing more."
             }
         });
         await SendAsync(ws, sessionUpdate, token);
