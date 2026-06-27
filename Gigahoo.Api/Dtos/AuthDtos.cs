@@ -27,7 +27,7 @@ public record VerifySmsCodeRequest
     [Required, MaxLength(20)]
     public string PhoneNumber { get; init; } = default!;
 
-    [Required, MaxLength(6), MinLength(4)]
+    [Required, MinLength(6), MaxLength(6)]
     public string Code { get; init; } = default!;
 }
 
