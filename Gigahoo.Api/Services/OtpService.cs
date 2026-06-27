@@ -8,6 +8,9 @@ public interface IOtpService
 {
     Task<string> GenerateAndStoreAsync(string identifier, string type, TimeSpan expiry);
     Task<bool> VerifyAsync(string identifier, string type, string code);
+    /// Seconds the caller must still wait before another code of this type may be
+    /// sent for this identifier (0 = may send now). Enforces a minimum send interval.
+    Task<int> SecondsUntilResendAsync(string identifier, string type, TimeSpan minInterval);
 }
 
 public class OtpService(GigahooDbContext db) : IOtpService
@@ -27,6 +30,18 @@ public class OtpService(GigahooDbContext db) : IOtpService
 
         await db.SaveChangesAsync();
         return code;
+    }
+
+    public async Task<int> SecondsUntilResendAsync(string identifier, string type, TimeSpan minInterval)
+    {
+        var lastSent = await db.OtpCodes
+            .Where(o => o.Identifier == identifier.ToLowerInvariant() && o.Type == type)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => (DateTime?)o.CreatedAt)
+            .FirstOrDefaultAsync();
+        if (lastSent is null) return 0;
+        var remaining = minInterval - (DateTime.UtcNow - lastSent.Value);
+        return remaining > TimeSpan.Zero ? (int)Math.Ceiling(remaining.TotalSeconds) : 0;
     }
 
     public async Task<bool> VerifyAsync(string identifier, string type, string code)

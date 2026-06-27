@@ -89,6 +89,11 @@ public class AuthController(
             return StatusCode(403, new { error = "region_signup_restricted" });
         }
 
+        // Rate-limit: at most one verification code per minute per email.
+        var emailWait = await otp.SecondsUntilResendAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(1));
+        if (emailWait > 0)
+            return StatusCode(429, new { error = $"Please wait {emailWait} seconds before requesting another code." });
+
         var code = await otp.GenerateAndStoreAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(15));
         var frontendUrl = config["Frontend:Url"] ?? "http://localhost:3000";
         var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
@@ -182,6 +187,11 @@ public class AuthController(
         {
             return StatusCode(403, new { error = "region_signup_restricted" });
         }
+
+        // Rate-limit: at most one verification code per minute per phone number.
+        var smsWait = await otp.SecondsUntilResendAsync(request.PhoneNumber, "SmsVerification", TimeSpan.FromMinutes(1));
+        if (smsWait > 0)
+            return StatusCode(429, new { error = $"Please wait {smsWait} seconds before requesting another code." });
 
         var code = await otp.GenerateAndStoreAsync(request.PhoneNumber, "SmsVerification", TimeSpan.FromMinutes(10));
         await sms.SendVerificationCodeAsync(request.PhoneNumber, code);
