@@ -115,6 +115,7 @@ public record AccountResponse(
     string? PostalCode,
     string Country,
     short CountryId,
+    string CountryCode,
     string Plan,
     byte PlanId,
     int IncludedMinutes,

@@ -14,6 +14,7 @@ namespace Gigahoo.Api.Controllers;
 public class BillingController(
     GigahooDbContext db,
     IStripeService stripe,
+    IPaymentProviderRegistry payments,
     IConfiguration config,
     ITwilioService twilio,
     Gigahoo.Api.Services.Providers.ITelephonyProvider telephony,
@@ -109,13 +110,11 @@ public class BillingController(
         if (plan is null) return NotFound(new { error = "Plan not found" });
         if (plan.PriceMonthly == 0) return BadRequest(new { error = "Free plans don't need checkout" });
 
-        // Create Stripe customer if not exists
-        if (account.StripeCustomerId is null)
-        {
-            var customerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName);
-            account.StripeCustomerId = customerId;
-            await db.SaveChangesAsync();
-        }
+        // Checkout uses the default provider for new payments.
+        var provider = payments.Default;
+
+        // Get-or-create the provider customer id (creates if missing).
+        var customerId = await provider.EnsureCustomerAsync(account);
 
         // Billing currency is fully data-driven: read it from the Country table
         // (no hardcoded country->currency mapping or default currency in code).
@@ -134,10 +133,10 @@ public class BillingController(
 
         // Price comes from the PlanPrice table for that currency. If it isn't set up,
         // fail explicitly rather than defaulting to a currency.
-        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.IsActive);
-        if (planPrice is null || string.IsNullOrEmpty(planPrice.StripePriceId))
-            return BadRequest(new { error = $"No Stripe price configured for plan '{plan.Name}' in {currency}" });
-        var priceId = planPrice.StripePriceId;
+        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.Provider == provider.Name && pp.IsActive);
+        if (planPrice is null || string.IsNullOrEmpty(planPrice.ProviderPriceId))
+            return BadRequest(new { error = $"No {provider.Name} price configured for plan '{plan.Name}' in {currency}" });
+        var priceId = planPrice.ProviderPriceId;
 
         // Reserve-then-charge: secure the phone number BEFORE creating the Checkout
         // session so we never take payment for a number we can't deliver. The
@@ -200,7 +199,7 @@ public class BillingController(
         var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing?session_id={{CHECKOUT_SESSION_ID}}";
         var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";
 
-        var url = await stripe.CreateCheckoutSessionAsync(account.StripeCustomerId, priceId, successUrl, cancelUrl);
+        var url = await stripe.CreateCheckoutSessionAsync(customerId, priceId, successUrl, cancelUrl);
 
         return Ok(new CheckoutResponse(url));
     }
@@ -226,13 +225,82 @@ public class BillingController(
         var accountId = GetAccountId();
         var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
 
-        if (account.StripeCustomerId is null)
-            return BadRequest(new { error = "No Stripe customer found" });
+        var customerId = await payments.Default.EnsureCustomerAsync(account);
 
         var returnUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";
-        var url = await stripe.CreateBillingPortalSessionAsync(account.StripeCustomerId, returnUrl);
+        var url = await stripe.CreateBillingPortalSessionAsync(customerId, returnUrl);
 
         return Ok(new { url });
+    }
+
+    // Provider-agnostic payment-method management for the dashboard. The account
+    // comes from the auth context. Multiple providers can be active at once: new
+    // payments use the registry's Default, while existing methods are listed across
+    // every provider the account already has a PaymentCustomer for.
+
+    // Returns a client secret the frontend uses to confirm a card setup. Optionally
+    // target a specific provider via ?provider=<name> (defaults to the registry Default).
+    [HttpPost("setup-intent")]
+    public async Task<IActionResult> CreateSetupIntent([FromQuery] string? provider)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
+
+        var paymentProvider = provider is null ? payments.Default : payments.Get(provider);
+
+        var customerId = await paymentProvider.EnsureCustomerAsync(account);
+        var clientSecret = await paymentProvider.CreateSetupIntentAsync(customerId);
+
+        return Ok(new { provider = paymentProvider.Name, clientSecret });
+    }
+
+    [HttpGet("payment-methods")]
+    public async Task<IActionResult> GetPaymentMethods()
+    {
+        var accountId = GetAccountId();
+
+        // An account may have customers across multiple providers. List methods from
+        // each PaymentCustomer the account has, tagging every method with its provider.
+        var customers = await db.PaymentCustomers
+            .Where(pc => pc.AccountId == accountId)
+            .ToListAsync();
+
+        var result = new List<object>();
+        foreach (var customer in customers)
+        {
+            var paymentProvider = payments.Get(customer.Provider);
+            var methods = await paymentProvider.ListPaymentMethodsAsync(customer.CustomerId);
+            result.AddRange(methods.Select(m => new
+            {
+                id = m.Id,
+                brand = m.Brand,
+                last4 = m.Last4,
+                expMonth = m.ExpMonth,
+                expYear = m.ExpYear,
+                provider = paymentProvider.Name,
+            }));
+        }
+
+        return Ok(result);
+    }
+
+    [HttpDelete("payment-methods/{id}")]
+    public async Task<IActionResult> DeletePaymentMethod(string id, [FromQuery] string? provider)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
+
+        var paymentProvider = provider is null ? payments.Default : payments.Get(provider);
+
+        // Verify the payment method belongs to this account's customer (on the given
+        // provider) before detaching.
+        var customerId = await paymentProvider.EnsureCustomerAsync(account);
+        var methods = await paymentProvider.ListPaymentMethodsAsync(customerId);
+        if (!methods.Any(m => m.Id == id))
+            return NotFound(new { error = "Payment method not found" });
+
+        await paymentProvider.DetachPaymentMethodAsync(id);
+        return NoContent();
     }
 
     private static List<string> GetPlanFeatures(Entities.Plan plan) => plan.Name switch

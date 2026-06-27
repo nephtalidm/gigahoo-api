@@ -17,6 +17,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
     public DbSet<PlanPrice> PlanPrices => Set<PlanPrice>();
+    public DbSet<PaymentCustomer> PaymentCustomers => Set<PaymentCustomer>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Setting> Settings => Set<Setting>();
 
@@ -25,16 +26,28 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // Plan
         modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.Id);
 
-        // PlanPrice (one row per plan x currency)
+        // PlanPrice (one row per plan x currency x provider)
         modelBuilder.Entity<PlanPrice>(e =>
         {
             e.ToTable("PlanPrice");
             e.HasKey(x => x.Id);
             e.Property(x => x.Currency).HasMaxLength(3);
-            e.Property(x => x.StripePriceId).HasMaxLength(255);
+            e.Property(x => x.Provider).HasMaxLength(20);
+            e.Property(x => x.ProviderPriceId).HasMaxLength(255);
             e.Property(x => x.Amount).HasPrecision(10, 2);
-            e.HasIndex(x => new { x.PlanId, x.Currency }).IsUnique();
+            e.HasIndex(x => new { x.PlanId, x.Currency, x.Provider }).IsUnique();
             e.HasOne(x => x.Plan).WithMany(p => p.Prices).HasForeignKey(x => x.PlanId);
+        });
+
+        // PaymentCustomer (provider customer id per account x provider)
+        modelBuilder.Entity<PaymentCustomer>(e =>
+        {
+            e.ToTable("PaymentCustomer");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasMaxLength(20);
+            e.Property(x => x.CustomerId).HasMaxLength(255);
+            e.HasIndex(x => new { x.AccountId, x.Provider }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId);
         });
 
         // BusinessCategory
@@ -97,6 +110,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
+            e.Property(x => x.LlmProvider).HasMaxLength(20);
         });
 
         // Conversation

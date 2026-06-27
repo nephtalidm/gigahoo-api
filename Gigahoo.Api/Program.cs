@@ -64,6 +64,13 @@ try
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<IStripeService, StripeService>();
+
+    // Payment providers: register EVERY implementation so they're all active at
+    // once. The registry exposes them by Name and picks Default for new payments
+    // ("Payments:DefaultProvider", fallback "stripe"). Adding a second provider is
+    // just one more AddScoped<IPaymentProvider, XProvider>() line below.
+    builder.Services.AddScoped<IPaymentProvider, StripePaymentProvider>();
+    builder.Services.AddScoped<IPaymentProviderRegistry, PaymentProviderRegistry>();
     builder.Services.AddScoped<ITwilioService, TwilioService>();
     builder.Services.AddScoped<IPhoneNumberCleanupService, PhoneNumberCleanupService>();
 
