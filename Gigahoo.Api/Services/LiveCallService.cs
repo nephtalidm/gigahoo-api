@@ -127,7 +127,7 @@ public static class LiveCallService
         }
 
         var browserToQwen = PumpBrowserToQwenAsync(browser, qwen, qwenSendLock, linkedCts, token);
-        var qwenToBrowser = PumpQwenToBrowserAsync(browser, qwen, browserSendLock, linkedCts, token);
+        var qwenToBrowser = PumpQwenToBrowserAsync(browser, qwen, browserSendLock, qwenSendLock, linkedCts, token);
 
         try
         {
@@ -215,11 +215,15 @@ public static class LiveCallService
         WebSocket browser,
         ClientWebSocket qwen,
         SemaphoreSlim browserSendLock,
+        SemaphoreSlim qwenSendLock,
         CancellationTokenSource linkedCts,
         CancellationToken token)
     {
         var buffer = new byte[32 * 1024];
         using var ms = new MemoryStream();
+        // Once the session is configured, proactively trigger the agent's opening
+        // greeting with a single response.create — sent only once per call.
+        var greetingTriggered = false;
         try
         {
             while (!token.IsCancellationRequested && qwen.State == WebSocketState.Open)
@@ -251,6 +255,16 @@ public static class LiveCallService
 
                     switch (type)
                     {
+                        case "session.updated":
+                            // Session is now configured; greet the caller first.
+                            if (!greetingTriggered)
+                            {
+                                greetingTriggered = true;
+                                await SendQwenJsonAsync(qwen, qwenSendLock,
+                                    new { type = "response.create" }, token);
+                            }
+                            break;
+
                         case "response.audio.delta":
                             // base64 PCM16 24kHz -> raw bytes as a binary frame.
                             if (root.TryGetProperty("delta", out var audioDelta) &&
