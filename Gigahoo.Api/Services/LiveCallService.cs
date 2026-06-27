@@ -50,9 +50,12 @@ public static class LiveCallService
         // One-time session.update describing the persona and audio formats.
         var businessKind = string.IsNullOrWhiteSpace(category) ? "home service" : category;
         var persona =
-            $"You are a warm, professional phone receptionist for a {businessKind} business. " +
-            "Greet the caller, answer questions about services, and collect their name, address, " +
-            "and the reason for their call. Keep replies short and natural, like a real phone call.";
+            $"You are Sarah, a warm, efficient phone receptionist for a {businessKind} business. " +
+            "Keep EVERY reply to ONE short, natural spoken sentence — never give long explanations " +
+            "or lists, and never repeat yourself. Let the caller speak and don't fill silences. " +
+            "Naturally collect the caller's name, address, and the reason for their call. When the " +
+            "caller says goodbye or clearly has nothing more, give a brief one-line farewell and then " +
+            "call the end_call function.";
 
         var sessionUpdate = new
         {
@@ -64,8 +67,19 @@ public static class LiveCallService
                 instructions = persona,
                 input_audio_format = "pcm16",
                 output_audio_format = "pcm16",
-                turn_detection = new { type = "server_vad" },
-                input_audio_transcription = new { model = "gummy-realtime-v1" }
+                turn_detection = new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 700 },
+                input_audio_transcription = new { model = "gummy-realtime-v1" },
+                tools = new object[]
+                {
+                    new
+                    {
+                        type = "function",
+                        name = "end_call",
+                        description = "End the phone call after the caller says goodbye or the conversation is clearly complete.",
+                        parameters = new { type = "object", properties = new { } }
+                    }
+                },
+                tool_choice = "auto"
             }
         };
 
@@ -244,6 +258,33 @@ public static class LiveCallService
                                 new { type = "agent_done" }, token);
                             break;
 
+                        case "response.function_call_arguments.done":
+                            // Agent finished invoking a tool. End the call if it's end_call.
+                            if (root.TryGetProperty("name", out var fnName) &&
+                                fnName.ValueKind == JsonValueKind.String &&
+                                fnName.GetString() == "end_call")
+                            {
+                                await EndCallAsync(browser, qwen, browserSendLock, token);
+                                return;
+                            }
+                            break;
+
+                        case "response.output_item.done":
+                            // Some realtime variants report the call as an output item.
+                            if (root.TryGetProperty("item", out var item) &&
+                                item.ValueKind == JsonValueKind.Object &&
+                                item.TryGetProperty("type", out var itemType) &&
+                                itemType.ValueKind == JsonValueKind.String &&
+                                itemType.GetString() == "function_call" &&
+                                item.TryGetProperty("name", out var itemName) &&
+                                itemName.ValueKind == JsonValueKind.String &&
+                                itemName.GetString() == "end_call")
+                            {
+                                await EndCallAsync(browser, qwen, browserSendLock, token);
+                                return;
+                            }
+                            break;
+
                         case "error":
                             string message = "Voice service error.";
                             if (root.TryGetProperty("error", out var errObj))
@@ -325,6 +366,16 @@ public static class LiveCallService
         {
             sendLock.Release();
         }
+    }
+
+    // Notify the browser that the agent ended the call, then gracefully close both
+    // sockets so the outer Task.WhenAll completes and the call tears down.
+    private static async Task EndCallAsync(
+        WebSocket browser, ClientWebSocket qwen, SemaphoreSlim browserSendLock, CancellationToken token)
+    {
+        await SendBrowserTextAsync(browser, browserSendLock, new { type = "call_ended" }, token);
+        await SafeCloseAsync(browser, CancellationToken.None);
+        await SafeCloseAsync(qwen, CancellationToken.None);
     }
 
     private static async Task SafeCloseAsync(WebSocket socket, CancellationToken token)
