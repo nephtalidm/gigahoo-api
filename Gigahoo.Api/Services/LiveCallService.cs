@@ -81,6 +81,13 @@ public static class LiveCallService
             "caller says goodbye or clearly has nothing more, give a brief one-line farewell and then " +
             "call the end_call function.";
 
+        // Candidate languages for transcription: start with the page locale so the
+        // recognizer follows the caller's actual speech instead of defaulting to Chinese.
+        var hints = new[] { lang ?? "en", "en", "es", "fr", "zh", "ja", "ko", "ru", "ar", "hi", "de", "it", "pt" }
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Distinct()
+            .ToArray();
+
         var sessionUpdate = new
         {
             type = "session.update",
@@ -92,7 +99,7 @@ public static class LiveCallService
                 input_audio_format = "pcm16",
                 output_audio_format = "pcm16",
                 turn_detection = new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 700 },
-                input_audio_transcription = new { model = "gummy-realtime-v1", language = lang },
+                input_audio_transcription = new { model = "gummy-realtime-v1", language_hints = hints },
                 tools = new object[]
                 {
                     new
