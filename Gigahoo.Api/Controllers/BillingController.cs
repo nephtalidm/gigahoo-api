@@ -52,7 +52,7 @@ public class BillingController(
     [HttpGet("plans")]
     public async Task<ActionResult<List<PlanResponse>>> GetPlans()
     {
-        var plans = await db.Plans.Where(p => p.IsActive).ToListAsync();
+        var plans = await db.Plans.Where(p => p.IsActive).OrderBy(p => p.DisplayOrder).ToListAsync();
 
         var result = plans.Select(p => new PlanResponse(
             p.Id,
@@ -60,6 +60,7 @@ public class BillingController(
             p.PriceMonthly,
             p.IncludedMinutes,
             p.HasOptionalFeatures,
+            p.DisplayOrder,
             GetPlanFeatures(p)
         )).ToList();
 

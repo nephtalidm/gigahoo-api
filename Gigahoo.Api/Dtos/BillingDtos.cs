@@ -8,6 +8,7 @@ public record PlanResponse(
     decimal PriceMonthly,
     int IncludedMinutes,
     bool HasOptionalFeatures,
+    int DisplayOrder,
     List<string> Features
 );
 
