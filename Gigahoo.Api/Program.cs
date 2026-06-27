@@ -64,6 +64,7 @@ try
     builder.Services.AddScoped<IOtpService, OtpService>();
     builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<IStripeService, StripeService>();
+    builder.Services.AddScoped<IVoiceSampleService, VoiceSampleService>();
 
     // Payment providers: register EVERY implementation so they're all active at
     // once. The registry exposes them by Name and picks Default for new payments
