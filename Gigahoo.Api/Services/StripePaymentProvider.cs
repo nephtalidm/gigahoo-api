@@ -15,8 +15,14 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
 
     public async Task<string> EnsureCustomerAsync(Account account)
     {
+        // Resolve this provider's Provider row (Code == Name, Payment type) once.
+        var providerRow = await db.Providers
+            .FirstOrDefaultAsync(p => p.Code == Name && p.ProviderTypeId == (byte)Entities.ProviderTypeId.Payment)
+            ?? throw new InvalidOperationException(
+                $"No Provider row found for payment provider '{Name}'. Run the provider-tables migration.");
+
         var existing = await db.PaymentCustomers
-            .FirstOrDefaultAsync(pc => pc.AccountId == account.Id && pc.Provider == Name);
+            .FirstOrDefaultAsync(pc => pc.AccountId == account.Id && pc.ProviderId == providerRow.Id);
         if (existing is not null)
             return existing.CustomerId;
 
@@ -31,7 +37,7 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
         db.PaymentCustomers.Add(new PaymentCustomer
         {
             AccountId = account.Id,
-            Provider = Name,
+            ProviderId = providerRow.Id,
             CustomerId = customer.Id,
         });
 

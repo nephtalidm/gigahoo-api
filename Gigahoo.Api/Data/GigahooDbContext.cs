@@ -18,6 +18,8 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
     public DbSet<PlanPrice> PlanPrices => Set<PlanPrice>();
     public DbSet<PaymentCustomer> PaymentCustomers => Set<PaymentCustomer>();
+    public DbSet<ProviderType> ProviderTypes => Set<ProviderType>();
+    public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Setting> Settings => Set<Setting>();
 
@@ -26,17 +28,38 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         // Plan
         modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.Id);
 
+        // ProviderType (LLM / Payment / Phone / SMS / Email lookup)
+        modelBuilder.Entity<ProviderType>(e =>
+        {
+            e.ToTable("ProviderType");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(20);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+
+        // Provider (concrete provider rows: Stripe, Qwen, Twilio, SendGrid, ...)
+        modelBuilder.Entity<Provider>(e =>
+        {
+            e.ToTable("Provider");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(50);
+            e.Property(x => x.Code).HasMaxLength(30);
+            e.HasIndex(x => new { x.Code, x.ProviderTypeId }).IsUnique();
+            e.HasOne(x => x.ProviderType).WithMany(t => t.Providers).HasForeignKey(x => x.ProviderTypeId);
+        });
+
         // PlanPrice (one row per plan x currency x provider)
         modelBuilder.Entity<PlanPrice>(e =>
         {
             e.ToTable("PlanPrice");
             e.HasKey(x => x.Id);
             e.Property(x => x.Currency).HasMaxLength(3);
-            e.Property(x => x.Provider).HasMaxLength(20);
             e.Property(x => x.ProviderPriceId).HasMaxLength(255);
             e.Property(x => x.Amount).HasPrecision(10, 2);
-            e.HasIndex(x => new { x.PlanId, x.Currency, x.Provider }).IsUnique();
+            e.HasIndex(x => new { x.PlanId, x.Currency, x.ProviderId }).IsUnique();
             e.HasOne(x => x.Plan).WithMany(p => p.Prices).HasForeignKey(x => x.PlanId);
+            e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
         });
 
         // PaymentCustomer (provider customer id per account x provider)
@@ -44,10 +67,10 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         {
             e.ToTable("PaymentCustomer");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Provider).HasMaxLength(20);
             e.Property(x => x.CustomerId).HasMaxLength(255);
-            e.HasIndex(x => new { x.AccountId, x.Provider }).IsUnique();
+            e.HasIndex(x => new { x.AccountId, x.ProviderId }).IsUnique();
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId);
+            e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
         });
 
         // BusinessCategory
@@ -110,7 +133,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
-            e.Property(x => x.LlmProvider).HasMaxLength(20);
+            e.HasOne(x => x.LlmProvider).WithMany().HasForeignKey(x => x.LlmProviderId).HasConstraintName("FK_Account_LlmProvider").OnDelete(DeleteBehavior.NoAction);
         });
 
         // Conversation

@@ -86,9 +86,16 @@ public class BillingController(
         if (string.IsNullOrEmpty(currency)) currency = "USD";
 
         var plans = await db.Plans.Where(p => p.IsActive).ToListAsync();
-        var prices = await db.PlanPrices
-            .Where(pp => pp.Currency == currency && pp.IsActive)
-            .ToListAsync();
+
+        // Restrict to the default payment provider's prices so there's exactly one
+        // row per (plan, currency) even if other providers later add their own prices.
+        var defaultProvider = await db.Providers.FirstOrDefaultAsync(
+            p => p.Code == payments.Default.Name && p.ProviderTypeId == (byte)Entities.ProviderTypeId.Payment);
+        var prices = defaultProvider is null
+            ? new List<Entities.PlanPrice>()
+            : await db.PlanPrices
+                .Where(pp => pp.Currency == currency && pp.IsActive && pp.ProviderId == defaultProvider.Id)
+                .ToListAsync();
 
         var result = plans.Select(p =>
         {
@@ -113,6 +120,10 @@ public class BillingController(
 
         // Checkout uses the default provider for new payments.
         var provider = payments.Default;
+        var providerRow = await db.Providers.FirstOrDefaultAsync(
+            p => p.Code == provider.Name && p.ProviderTypeId == (byte)Entities.ProviderTypeId.Payment);
+        if (providerRow is null)
+            return BadRequest(new { error = $"Payment provider '{provider.Name}' is not configured." });
 
         // Get-or-create the provider customer id (creates if missing).
         var customerId = await provider.EnsureCustomerAsync(account);
@@ -134,7 +145,7 @@ public class BillingController(
 
         // Price comes from the PlanPrice table for that currency. If it isn't set up,
         // fail explicitly rather than defaulting to a currency.
-        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.Provider == provider.Name && pp.IsActive);
+        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.ProviderId == providerRow.Id && pp.IsActive);
         if (planPrice is null || string.IsNullOrEmpty(planPrice.ProviderPriceId))
             return BadRequest(new { error = $"No {provider.Name} price configured for plan '{plan.Name}' in {currency}" });
         var priceId = planPrice.ProviderPriceId;
@@ -264,12 +275,13 @@ public class BillingController(
         // each PaymentCustomer the account has, tagging every method with its provider.
         var customers = await db.PaymentCustomers
             .Where(pc => pc.AccountId == accountId)
+            .Include(pc => pc.Provider)
             .ToListAsync();
 
         var result = new List<object>();
         foreach (var customer in customers)
         {
-            var paymentProvider = payments.Get(customer.Provider);
+            var paymentProvider = payments.Get(customer.Provider.Code);
             var methods = await paymentProvider.ListPaymentMethodsAsync(customer.CustomerId);
             result.AddRange(methods.Select(m => new
             {

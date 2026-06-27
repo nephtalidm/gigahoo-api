@@ -37,7 +37,7 @@ public class Account
 
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
-    public string LlmProvider { get; set; } = "qwen";
+    public int? LlmProviderId { get; set; }
     public string? PhoneNumberSid { get; set; }
     public string? TelephonyProvider { get; set; }
     public DateOnly? BillingPeriodStart { get; set; }
@@ -73,6 +73,7 @@ public class Account
     public DateTime UpdatedAt { get; set; }
 
     public Plan Plan { get; set; } = null!;
+    public Provider? LlmProvider { get; set; }
     public BusinessCategory? Category { get; set; }
     public Region? Region { get; set; }
     public ICollection<Conversation> Conversations { get; set; } = [];

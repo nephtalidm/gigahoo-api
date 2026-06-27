@@ -7,6 +7,7 @@ public class PaymentCustomer
 {
     public int Id { get; set; }
     public Guid AccountId { get; set; }
-    public string Provider { get; set; } = "stripe";  // e.g. "stripe"
+    public int ProviderId { get; set; }                // FK -> Provider (payment provider)
     public string CustomerId { get; set; } = null!;    // the provider's customer id
+    public Provider Provider { get; set; } = null!;
 }
