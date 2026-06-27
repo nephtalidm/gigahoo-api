@@ -256,10 +256,26 @@ public static class LiveCallService
                     switch (type)
                     {
                         case "session.updated":
-                            // Session is now configured; greet the caller first.
+                            // Session is now configured; greet the caller first. The model
+                            // refuses to respond with no user turn, so inject a brief call-start
+                            // cue (text, not audio — it never shows in the transcript), then
+                            // trigger the opening greeting.
                             if (!greetingTriggered)
                             {
                                 greetingTriggered = true;
+                                await SendQwenJsonAsync(qwen, qwenSendLock, new
+                                {
+                                    type = "conversation.item.create",
+                                    item = new
+                                    {
+                                        type = "message",
+                                        role = "user",
+                                        content = new[]
+                                        {
+                                            new { type = "input_text", text = "The caller has just connected. Greet them to begin the call." }
+                                        }
+                                    }
+                                }, token);
                                 await SendQwenJsonAsync(qwen, qwenSendLock,
                                     new { type = "response.create" }, token);
                             }
