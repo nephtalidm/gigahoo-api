@@ -25,6 +25,9 @@ public class Account
     public string? WebsiteUrl { get; set; }
     public string? BusinessHours { get; set; }
     public string? ForwardingPhone { get; set; }
+    // Preferred dashboard/website language (BCP-47-ish locale, e.g. "en", "es",
+    // "yue"). Defaults to the locale the user signed up in. NULL = not set.
+    public string? AccountLanguage { get; set; }
     public byte PlanId { get; set; } = 2;
 
     public string? AddressLine1 { get; set; }

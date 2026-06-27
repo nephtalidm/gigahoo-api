@@ -19,7 +19,7 @@ public interface IVoiceSampleService
 
 public class VoiceSampleService(IConfiguration config, ILogger<VoiceSampleService> logger) : IVoiceSampleService
 {
-    private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-omni-plus-realtime";
+    private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-omni-flash-realtime";
     private const int SampleRate = 24000;
 
     public async Task<byte[]> SynthesizeAsync(string text, string voice, CancellationToken ct = default)

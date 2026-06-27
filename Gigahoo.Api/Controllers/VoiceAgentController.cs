@@ -51,6 +51,10 @@ public class VoiceAgentController(
             greetingMessage = "Hi, thanks for calling! How can I help you today?";
         }
 
+        // Substitute the business-name placeholder so the voice agent receives the
+        // greeting with the real business name baked in.
+        greetingMessage = greetingMessage.Replace("[Name of business]", account.BusinessName);
+
         string? regionName = null;
         if (account.RegionId.HasValue)
         {

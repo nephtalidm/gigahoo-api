@@ -46,6 +46,12 @@ public record CreateAccountRequest
     // email/SMS signups (enforced in the controller).
     [MinLength(8), MaxLength(128)]
     public string? Password { get; init; }
+
+    // The locale the user signed up in (NEXT_LOCALE), used as the default
+    // dashboard/website language. Validated against the supported locales
+    // server-side; falls back to "en" if missing/unsupported.
+    [MaxLength(10)]
+    public string? Language { get; init; }
 }
 
 public record UpdateAccountRequest
@@ -128,8 +134,15 @@ public record AccountResponse(
     bool EmailCallNotifications,
     bool SmsCallNotifications,
     string? GreetingMessage,
-    string? AgentVoice
+    string? AgentVoice,
+    string AccountLanguage
 );
+
+public record UpdateAccountLanguageRequest
+{
+    [Required, MaxLength(10)]
+    public string Language { get; init; } = default!;
+}
 
 public record VoiceSettingsResponse(
     string? Greeting,

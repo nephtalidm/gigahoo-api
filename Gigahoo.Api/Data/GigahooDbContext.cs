@@ -133,6 +133,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
+            e.Property(x => x.AccountLanguage).HasMaxLength(10);
             e.HasOne(x => x.LlmProvider).WithMany().HasForeignKey(x => x.LlmProviderId).HasConstraintName("FK_Account_LlmProvider").OnDelete(DeleteBehavior.NoAction);
         });
 

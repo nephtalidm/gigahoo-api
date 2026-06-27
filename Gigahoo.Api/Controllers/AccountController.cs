@@ -28,6 +28,13 @@ public class AccountController(
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
+    // The website/dashboard locales Gigahoo supports. Keep in sync with the UI's
+    // lib/i18n/config.ts locale list.
+    private static readonly HashSet<string> SupportedLocales = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "en", "es", "fr", "zh", "yue", "hi", "pa", "tl", "ko", "ja", "ru", "uk", "ar", "fa"
+    };
+
     [HttpPost]
     public async Task<ActionResult<AccountResponse>> Create([FromBody] CreateAccountRequest request)
     {
@@ -84,6 +91,11 @@ public class AccountController(
         account.City = request.City;
         account.RegionCustom = request.Region;
         account.PostalCode = request.PostalCode;
+        // Default the dashboard language to the locale the user signed up in,
+        // falling back to English when missing or unsupported.
+        account.AccountLanguage = request.Language is not null && SupportedLocales.Contains(request.Language)
+            ? request.Language.ToLowerInvariant()
+            : "en";
         // Gigahoo only serves countries flagged IsSupported in the Country table —
         // reject any other business country before saving.
         var supported = await db.Countries.AnyAsync(c => c.Code == request.CountryCode && c.IsSupported);
@@ -458,6 +470,23 @@ public class AccountController(
         return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice));
     }
 
+    [HttpPut("language")]
+    public async Task<IActionResult> UpdateLanguage([FromBody] UpdateAccountLanguageRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Language) || !SupportedLocales.Contains(request.Language))
+            return BadRequest(new { error = "Unsupported language." });
+
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        if (account is null) return NotFound();
+
+        account.AccountLanguage = request.Language.ToLowerInvariant();
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { language = account.AccountLanguage });
+    }
+
     private async Task<AccountResponse> MapToResponse(Account account)
     {
         var plan = account.Plan ?? await db.Plans.FindAsync(account.PlanId);
@@ -512,7 +541,8 @@ public class AccountController(
             account.EmailCallNotifications,
             account.SmsCallNotifications,
             account.GreetingMessage,
-            account.AgentVoice
+            account.AgentVoice,
+            account.AccountLanguage ?? ""
         );
     }
 }
