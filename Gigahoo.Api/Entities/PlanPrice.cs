@@ -9,7 +9,7 @@ public class PlanPrice
     public int Id { get; set; }
     public byte PlanId { get; set; }
     public string Currency { get; set; } = null!;   // ISO 4217, e.g. "USD", "MXN", "CAD"
-    public string Provider { get; set; } = "stripe"; // payment provider this price belongs to
+    public string Provider { get; set; } = null!;    // payment provider this price belongs to (set explicitly per row)
     public string? ProviderPriceId { get; set; }     // recurring price id from the provider (set later)
     public decimal Amount { get; set; }              // display amount in that currency
     public bool IsActive { get; set; } = true;
