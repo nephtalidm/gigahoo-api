@@ -15,10 +15,30 @@ public static class LiveCallService
     private const string QwenRealtimeUrl =
         "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-omni-flash-realtime";
 
+    // Maps a locale code to the language name used in the persona directive.
+    private static readonly Dictionary<string, string> LanguageNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["en"] = "English",
+        ["es"] = "Spanish",
+        ["fr"] = "French",
+        ["zh"] = "Mandarin Chinese",
+        ["yue"] = "Cantonese",
+        ["hi"] = "Hindi",
+        ["pa"] = "Punjabi",
+        ["tl"] = "Filipino (Tagalog)",
+        ["ko"] = "Korean",
+        ["ja"] = "Japanese",
+        ["ru"] = "Russian",
+        ["uk"] = "Ukrainian",
+        ["ar"] = "Arabic",
+        ["fa"] = "Persian",
+    };
+
     public static async Task RunAsync(
         WebSocket browser,
         string category,
         string voice,
+        string lang,
         IConfiguration config,
         CancellationToken ct)
     {
@@ -49,7 +69,10 @@ public static class LiveCallService
 
         // One-time session.update describing the persona and audio formats.
         var businessKind = string.IsNullOrWhiteSpace(category) ? "home service" : category;
+        var languageName = LanguageNames.TryGetValue(lang ?? "en", out var ln) ? ln : "English";
         var persona =
+            $"The caller speaks {languageName}. Always interpret the caller's speech as {languageName} " +
+            $"and reply ONLY in {languageName}, never another language. " +
             $"You are Sarah, a warm, efficient phone receptionist for a {businessKind} business. " +
             "Keep EVERY reply to ONE short, natural spoken sentence — never give long explanations " +
             "or lists, and never repeat yourself. Let the caller speak and don't fill silences. " +
@@ -68,7 +91,7 @@ public static class LiveCallService
                 input_audio_format = "pcm16",
                 output_audio_format = "pcm16",
                 turn_detection = new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 700 },
-                input_audio_transcription = new { model = "gummy-realtime-v1" },
+                input_audio_transcription = new { model = "gummy-realtime-v1", language = lang },
                 tools = new object[]
                 {
                     new

@@ -253,9 +253,11 @@ try
         var category = ctx.Request.Query["category"].ToString();
         var voice = ctx.Request.Query["voice"].ToString();
         if (string.IsNullOrWhiteSpace(voice)) voice = "Serena";
+        var lang = ctx.Request.Query["lang"].ToString();
+        if (string.IsNullOrWhiteSpace(lang)) lang = "en";
 
         using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
-        await LiveCallService.RunAsync(socket, category, voice, config, ctx.RequestAborted);
+        await LiveCallService.RunAsync(socket, category, voice, lang, config, ctx.RequestAborted);
     }).RequireCors("Frontend");
 
     app.MapControllers();
