@@ -11,10 +11,10 @@ namespace Gigahoo.Api.Controllers;
 [EnableRateLimiting("api")]
 public class VoiceController(IVoiceSampleService voiceSamples, ILogger<VoiceController> logger) : ControllerBase
 {
-    // The valid qwen3.5-omni-plus-realtime voices the UI offers.
+    // The valid qwen3-tts-flash voices the UI offers.
     private static readonly HashSet<string> ValidVoices = new(StringComparer.Ordinal)
     {
-        "Tina", "Ethan", "Jennifer", "Ryan", "Aiden", "Cindy", "Raymond"
+        "Serena", "Jennifer", "Katerina", "Kiki", "Sunny", "Ethan", "Ryan", "Aiden", "Marcus", "Peter", "Dylan", "Rocky", "Eric"
     };
 
     /// <summary>
