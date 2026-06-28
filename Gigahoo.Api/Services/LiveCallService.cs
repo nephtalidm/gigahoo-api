@@ -83,7 +83,10 @@ public static class LiveCallService
 
         // Candidate languages for transcription: start with the page locale so the
         // recognizer follows the caller's actual speech instead of defaulting to Chinese.
-        var hints = new[] { lang ?? "en", "en", "es", "fr", "zh", "ja", "ko", "ru", "ar", "hi", "de", "it", "pt" }
+        // Page locale first, then common languages. Chinese (zh) is intentionally NOT in
+        // the base list — gummy over-eagerly falls back to it — so it's only a candidate
+        // when the page itself is Chinese (the leading `lang`).
+        var hints = new[] { lang ?? "en", "en", "es", "fr", "ja", "ko", "ru", "ar", "hi", "de", "it", "pt" }
             .Where(h => !string.IsNullOrWhiteSpace(h))
             .Distinct()
             .ToArray();
