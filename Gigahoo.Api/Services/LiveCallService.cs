@@ -71,9 +71,9 @@ public static class LiveCallService
         var businessKind = string.IsNullOrWhiteSpace(category) ? "home service" : category;
         var languageName = LanguageNames.TryGetValue(lang ?? "en", out var ln) ? ln : "English";
         var persona =
-            $"The caller most likely speaks {languageName}, so greet them and begin in {languageName}. " +
-            $"But if the caller clearly speaks a different language, immediately switch to that language and " +
-            "continue the entire call in it — always mirror the caller's language. " +
+            $"The caller most likely speaks {languageName}, so greet them and conduct the call in {languageName}. " +
+            $"Only if the caller very clearly speaks English or Spanish should you switch to that language. " +
+            "Never respond in Chinese or in any language the caller did not clearly and unmistakably speak. " +
             $"You are Sarah, a warm, efficient phone receptionist for a {businessKind} business. " +
             "Keep EVERY reply to ONE short, natural spoken sentence — never give long explanations " +
             "or lists, and never repeat yourself. Let the caller speak and don't fill silences. " +
@@ -86,7 +86,9 @@ public static class LiveCallService
         // Page locale first, then common languages. Chinese (zh) is intentionally NOT in
         // the base list — gummy over-eagerly falls back to it — so it's only a candidate
         // when the page itself is Chinese (the leading `lang`).
-        var hints = new[] { lang ?? "en", "en", "es", "fr", "ja", "ko", "ru", "ar", "hi", "de", "it", "pt" }
+        // Limited to the served markets (page locale + EN/ES/FR). A long candidate list made
+        // gummy mis-detect ordinary speech as exotic languages (notably Chinese).
+        var hints = new[] { lang ?? "en", "en", "es", "fr" }
             .Where(h => !string.IsNullOrWhiteSpace(h))
             .Distinct()
             .ToArray();
