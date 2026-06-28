@@ -20,6 +20,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<PaymentCustomer> PaymentCustomers => Set<PaymentCustomer>();
     public DbSet<ProviderType> ProviderTypes => Set<ProviderType>();
     public DbSet<Provider> Providers => Set<Provider>();
+    public DbSet<Voice> Voices => Set<Voice>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Setting> Settings => Set<Setting>();
 
@@ -47,6 +48,17 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(x => x.Code).HasMaxLength(30);
             e.HasIndex(x => new { x.Code, x.ProviderTypeId }).IsUnique();
             e.HasOne(x => x.ProviderType).WithMany(t => t.Providers).HasForeignKey(x => x.ProviderTypeId);
+        });
+
+        // Voice (selectable AI-agent voices, owned by an LLM Provider)
+        modelBuilder.Entity<Voice>(e =>
+        {
+            e.ToTable("Voice");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ApiName).HasMaxLength(64);
+            e.Property(x => x.Label).HasMaxLength(128);
+            e.HasIndex(x => new { x.ProviderId, x.ApiName }).IsUnique();
+            e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
         });
 
         // PlanPrice (one row per plan x currency x provider)

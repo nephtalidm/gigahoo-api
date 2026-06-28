@@ -442,11 +442,6 @@ public class AccountController(
         return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
     }
 
-    // The voices the AI receptionist can speak with (Qwen). Keep in sync with the
-    // dashboard voice picker and the /public/voice-samples/<id>.mp3 sample files.
-    private static readonly HashSet<string> AllowedAgentVoices =
-        new(StringComparer.OrdinalIgnoreCase) { "Serena", "Jennifer", "Katerina", "Kiki", "Sunny", "Ethan", "Ryan", "Aiden", "Marcus", "Peter", "Dylan", "Rocky", "Eric" };
-
     [HttpPut("voice-settings")]
     public async Task<ActionResult<VoiceSettingsResponse>> UpdateVoiceSettings([FromBody] UpdateVoiceSettingsRequest request)
     {
@@ -459,8 +454,16 @@ public class AccountController(
             return BadRequest(new { error = "Greeting must be 500 characters or fewer." });
 
         var agentVoice = string.IsNullOrWhiteSpace(request.AgentVoice) ? null : request.AgentVoice.Trim();
-        if (agentVoice is not null && !AllowedAgentVoices.Contains(agentVoice))
-            return BadRequest(new { error = "Unknown voice selection." });
+        if (agentVoice is not null)
+        {
+            // Validate against the active voices the LLM provider (Qwen) actually offers,
+            // so the allowed set stays data-driven and survives an LLM-provider swap.
+            var isValidVoice = await db.Voices.AnyAsync(v =>
+                v.IsActive && v.ApiName == agentVoice &&
+                v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1);
+            if (!isValidVoice)
+                return BadRequest(new { error = "Unknown voice selection." });
+        }
 
         account.GreetingMessage = greeting;
         account.AgentVoice = agentVoice;
