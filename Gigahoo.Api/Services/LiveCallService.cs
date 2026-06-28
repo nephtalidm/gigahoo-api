@@ -101,7 +101,9 @@ public static class LiveCallService
                 instructions = persona,
                 input_audio_format = "pcm16",
                 output_audio_format = "pcm16",
-                turn_detection = new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 700 },
+                // Higher threshold = the agent only reacts to a clear, louder voice, so
+                // quiet background noise/chatter is less likely to be treated as speech.
+                turn_detection = new { type = "server_vad", threshold = 0.65, prefix_padding_ms = 300, silence_duration_ms = 700 },
                 input_audio_transcription = new { model = "gummy-realtime-v1", language_hints = hints },
                 tools = new object[]
                 {
