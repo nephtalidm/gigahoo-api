@@ -131,7 +131,11 @@ public static class LiveCallService
                 new { type = "error", message = "session.update failed: " + ex.Message }, token);
         }
 
-        var browserToQwen = PumpBrowserToQwenAsync(browser, qwen, qwenSendLock, linkedCts, token);
+        // Speaker-gating sidecar (fail-open): forwards only the caller's own voice to Qwen,
+        // dropping TV/radio/other-people/agent-echo. If the sidecar is down, gate stays open.
+        await using var gate = await SpeakerGate.ConnectAsync(voice, token);
+
+        var browserToQwen = PumpBrowserToQwenAsync(browser, qwen, qwenSendLock, gate, linkedCts, token);
         var qwenToBrowser = PumpQwenToBrowserAsync(browser, qwen, browserSendLock, qwenSendLock, linkedCts, token);
 
         try
@@ -156,6 +160,7 @@ public static class LiveCallService
         WebSocket browser,
         ClientWebSocket qwen,
         SemaphoreSlim qwenSendLock,
+        SpeakerGate gate,
         CancellationTokenSource linkedCts,
         CancellationToken token)
     {
@@ -180,6 +185,8 @@ public static class LiveCallService
                 {
                     var audioBytes = ms.ToArray();
                     if (audioBytes.Length == 0) continue;
+                    gate.Feed(audioBytes);       // tee to the gating sidecar (non-blocking)
+                    if (!gate.IsOpen) continue;  // gate closed -> non-caller voice (TV/radio/echo), drop it
                     var append = new
                     {
                         type = "input_audio_buffer.append",
