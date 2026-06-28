@@ -10,10 +10,16 @@ namespace Gigahoo.Api.Controllers;
 [EnableRateLimiting("api")]
 public class LookupController(GigahooDbContext db) : ControllerBase
 {
+    // When supportedOnly=true, restrict to served markets (Country.IsSupported) —
+    // used by the address country pickers so the filtering lives in the backend.
     [HttpGet("countries")]
-    public async Task<ActionResult<List<CountryResponse>>> GetCountries()
+    public async Task<ActionResult<List<CountryResponse>>> GetCountries([FromQuery] bool supportedOnly = false)
     {
-        var countries = await db.Countries
+        var query = db.Countries.AsQueryable();
+        if (supportedOnly)
+            query = query.Where(c => c.IsSupported);
+
+        var countries = await query
             .OrderBy(c => c.Name)
             .Select(c => new CountryResponse(c.Id, c.Name, c.Code, c.DialCode, c.Flag))
             .ToListAsync();
