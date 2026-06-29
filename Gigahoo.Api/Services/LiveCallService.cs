@@ -106,7 +106,7 @@ public static class LiveCallService
                 // Sensitive default so the caller's normal speech is reliably detected as a
                 // turn (the earlier 0.65 made it miss normal-volume speech → "didn't hear me").
                 turn_detection = new { type = "server_vad", threshold = 0.5, prefix_padding_ms = 300, silence_duration_ms = 700 },
-                input_audio_transcription = new { model = "gummy-realtime-v1", language_hints = hints },
+                input_audio_transcription = new { model = "qwen3-asr-flash-realtime", language_hints = hints },
                 tools = new object[]
                 {
                     new
