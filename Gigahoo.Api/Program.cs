@@ -235,31 +235,6 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.UseWebSockets();
-
-    // Public, unauthenticated WebSocket proxy for the "talk to the AI receptionist"
-    // web demo. Bridges the browser to Qwen's omni-realtime voice model so the
-    // browser never holds the DashScope API key. Works with the "Frontend" CORS
-    // policy (applied above). Browser->API binary = PCM16LE mono 16kHz mic audio;
-    // API->Browser binary = PCM16LE mono 24kHz model speech.
-    app.Map("/api/voice/live", async (HttpContext ctx, IConfiguration config) =>
-    {
-        if (!ctx.WebSockets.IsWebSocketRequest)
-        {
-            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-            return;
-        }
-
-        var category = ctx.Request.Query["category"].ToString();
-        var voice = ctx.Request.Query["voice"].ToString();
-        if (string.IsNullOrWhiteSpace(voice)) voice = "Serena";
-        var lang = ctx.Request.Query["lang"].ToString();
-        if (string.IsNullOrWhiteSpace(lang)) lang = "en";
-
-        using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
-        await LiveCallService.RunAsync(socket, category, voice, lang, config, ctx.RequestAborted);
-    }).RequireCors("Frontend");
-
     app.MapControllers();
     app.MapHealthChecks("/health");
 
