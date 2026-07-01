@@ -23,11 +23,49 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<Voice> Voices => Set<Voice>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Setting> Settings => Set<Setting>();
+    public DbSet<PhoneNumberStatus> PhoneNumberStatuses => Set<PhoneNumberStatus>();
+    public DbSet<ConversationStatus> ConversationStatuses => Set<ConversationStatus>();
+    public DbSet<ConversationType> ConversationTypes => Set<ConversationType>();
+    public DbSet<InvoiceStatus> InvoiceStatuses => Set<InvoiceStatus>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Plan
         modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.PlanId);
+
+        // Status / type lookups (normalized from former varchar columns)
+        modelBuilder.Entity<PhoneNumberStatus>(e =>
+        {
+            e.ToTable("PhoneNumberStatus");
+            e.HasKey(x => x.PhoneNumberStatusId);
+            e.Property(x => x.PhoneNumberStatusId).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(30);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+        modelBuilder.Entity<ConversationStatus>(e =>
+        {
+            e.ToTable("ConversationStatus");
+            e.HasKey(x => x.ConversationStatusId);
+            e.Property(x => x.ConversationStatusId).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(30);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+        modelBuilder.Entity<ConversationType>(e =>
+        {
+            e.ToTable("ConversationType");
+            e.HasKey(x => x.ConversationTypeId);
+            e.Property(x => x.ConversationTypeId).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(30);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
+        modelBuilder.Entity<InvoiceStatus>(e =>
+        {
+            e.ToTable("InvoiceStatus");
+            e.HasKey(x => x.InvoiceStatusId);
+            e.Property(x => x.InvoiceStatusId).ValueGeneratedNever();
+            e.Property(x => x.Name).HasMaxLength(30);
+            e.HasIndex(x => x.Name).IsUnique();
+        });
 
         // ProviderType (LLM / Payment / Phone / SMS / Email lookup)
         modelBuilder.Entity<ProviderType>(e =>
@@ -157,7 +195,9 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasOne(x => x.Account).WithMany(x => x.Conversations).HasForeignKey(x => x.AccountId);
             e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
             e.HasIndex(x => new { x.AccountId, x.DateTimeUtc }).IsDescending(false, true);
-            e.HasIndex(x => new { x.AccountId, x.Status });
+            e.HasIndex(x => new { x.AccountId, x.ConversationStatusId });
+            e.HasOne(x => x.ConversationStatus).WithMany(s => s.Conversations).HasForeignKey(x => x.ConversationStatusId);
+            e.HasOne(x => x.ConversationType).WithMany(t => t.Conversations).HasForeignKey(x => x.ConversationTypeId);
         });
 
         // Invoice
@@ -168,6 +208,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasOne(x => x.Account).WithMany(x => x.Invoices).HasForeignKey(x => x.AccountId);
             e.HasIndex(x => new { x.AccountId, x.DateUtc }).IsDescending(false, true);
             e.Property(x => x.Amount).HasColumnType("decimal(10,2)");
+            e.HasOne(x => x.InvoiceStatus).WithMany(s => s.Invoices).HasForeignKey(x => x.InvoiceStatusId);
         });
 
         // OtpCode
@@ -192,14 +233,14 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.ToTable("PhoneNumber");
             e.HasKey(x => x.PhoneNumberId);
             e.HasIndex(x => x.Sid).IsUnique();
-            e.HasIndex(x => x.Status);
-            e.HasIndex(x => new { x.CountryId, x.Status });
+            e.HasIndex(x => x.PhoneNumberStatusId);
+            e.HasIndex(x => new { x.CountryId, x.PhoneNumberStatusId });
             e.HasIndex(x => x.AssignedAccountId);
             e.Property(x => x.MonthlyCost).HasColumnType("decimal(10,2)");
-            e.Property(x => x.Status).HasConversion<string>(); // Store enum as string
             e.HasOne(x => x.AssignedAccount).WithMany().HasForeignKey(x => x.AssignedAccountId);
             e.HasOne(x => x.Country).WithMany().HasForeignKey(x => x.CountryId);
             e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
+            e.HasOne(x => x.PhoneNumberStatus).WithMany(s => s.PhoneNumbers).HasForeignKey(x => x.PhoneNumberStatusId);
         });
     }
 }

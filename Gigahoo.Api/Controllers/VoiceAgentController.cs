@@ -110,12 +110,14 @@ public class VoiceAgentController(
         {
             AccountId = accountId,
             CallerName = request.CallerName,
-            CallerPhone = request.CallerPhone,
+            CallerPhoneNumber = request.CallerPhoneNumber,
             DateTimeUtc = DateTime.UtcNow,
             DurationSeconds = request.DurationSeconds,
             LanguageId = request.LanguageId ?? 1, // Default to English
             Summary = request.Summary,
-            Status = request.Status,
+            ConversationStatusId = (byte)(Enum.TryParse<Entities.ConversationStatusId>(request.Status, ignoreCase: true, out var cs)
+                ? cs : Entities.ConversationStatusId.Missed),
+            ConversationTypeId = (byte)Entities.ConversationTypeId.PhoneCall,
             CreatedAt = DateTime.UtcNow,
         };
 
@@ -171,7 +173,7 @@ public class VoiceAgentController(
                     account.Email,
                     account.BusinessName ?? "there",
                     request.CallerName,
-                    request.CallerPhone,
+                    request.CallerPhoneNumber,
                     request.DurationSeconds,
                     request.Summary);
             }
@@ -189,7 +191,7 @@ public class VoiceAgentController(
                 try
                 {
                     var mmss = $"{request.DurationSeconds / 60}:{request.DurationSeconds % 60:D2}";
-                    var text = $"New Gigahoo call — {request.CallerName ?? "Unknown"} ({request.CallerPhone}), {mmss} min.\n{request.Summary}";
+                    var text = $"New Gigahoo call — {request.CallerName ?? "Unknown"} ({request.CallerPhoneNumber}), {mmss} min.\n{request.Summary}";
                     await smsProvider.SendAsync(ownerPhone, text);
                 }
                 catch (Exception ex)
@@ -236,7 +238,7 @@ public record VoiceAgentFeatureSettings(
 
 public record CreateConversationRequest(
     string? CallerName,
-    string CallerPhone,
+    string CallerPhoneNumber,
     int DurationSeconds,
     byte? LanguageId,
     string? Summary,

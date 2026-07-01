@@ -5,14 +5,17 @@ public class Conversation
     public Guid ConversationId { get; set; }
     public Guid AccountId { get; set; }
     public string? CallerName { get; set; }
-    public string CallerPhone { get; set; } = null!;
+    public string CallerPhoneNumber { get; set; } = null!;
     public DateTime DateTimeUtc { get; set; }
     public int DurationSeconds { get; set; }
     public byte? LanguageId { get; set; }
     public string? Summary { get; set; }
-    public string Status { get; set; } = "Missed";
+    public byte ConversationStatusId { get; set; } = 1; // FK -> ConversationStatus (1 = Missed)
+    public byte ConversationTypeId { get; set; } = 1;   // FK -> ConversationType (1 = Phone Call)
     public DateTime CreatedAt { get; set; }
 
     public Account Account { get; set; } = null!;
     public Language? Language { get; set; }
+    public ConversationStatus? ConversationStatus { get; set; }
+    public ConversationType? ConversationType { get; set; }
 }

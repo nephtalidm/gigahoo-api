@@ -112,7 +112,7 @@ public class StripeWebhookController(
             DateUtc = DateTime.UtcNow,
             Amount = invoice.AmountPaid / 100m,
             Currency = invoice.Currency?.ToUpper() ?? "USD",
-            Status = "Paid",
+            InvoiceStatusId = (byte)Entities.InvoiceStatusId.Paid,
             PdfUrl = invoice.HostedInvoiceUrl,
             CreatedAt = DateTime.UtcNow,
         });

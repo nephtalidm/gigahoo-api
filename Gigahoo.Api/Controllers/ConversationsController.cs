@@ -30,7 +30,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             .Where(c => c.AccountId == accountId);
 
         if (!string.IsNullOrEmpty(status))
-            query = query.Where(c => c.Status == status);
+            query = query.Where(c => c.ConversationStatus!.Name == status);
 
         var totalCount = await query.CountAsync();
 
@@ -41,12 +41,12 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             .Select(c => new ConversationResponse(
                 c.ConversationId,
                 c.CallerName,
-                c.CallerPhone,
+                c.CallerPhoneNumber,
                 c.DateTimeUtc,
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
-                c.Status
+                c.ConversationStatus!.Name
             ))
             .ToListAsync();
 
@@ -60,6 +60,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
 
         var conversation = await db.Conversations
             .Include(c => c.Language)
+            .Include(c => c.ConversationStatus)
             .FirstOrDefaultAsync(c => c.ConversationId == id && c.AccountId == accountId);
 
         if (conversation is null) return NotFound();
@@ -67,12 +68,12 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
         return Ok(new ConversationResponse(
             conversation.ConversationId,
             conversation.CallerName,
-            conversation.CallerPhone,
+            conversation.CallerPhoneNumber,
             conversation.DateTimeUtc,
             conversation.DurationSeconds,
             conversation.Language?.Name ?? "English",
             conversation.Summary,
-            conversation.Status
+            conversation.ConversationStatus!.Name
         ));
     }
 }

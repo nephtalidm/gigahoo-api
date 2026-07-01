@@ -74,7 +74,7 @@ public class PhoneNumberCleanupService(
         var cutoff = DateTime.UtcNow.AddHours(-24);
 
         var abandoned = await db.PhoneNumbers
-            .Where(p => p.Status == Entities.PhoneNumberStatus.Assigned)
+            .Where(p => p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Assigned)
             .Where(p => p.AssignedAt != null && p.AssignedAt < cutoff)
             .Join(db.Accounts,
                 p => p.AssignedAccountId,

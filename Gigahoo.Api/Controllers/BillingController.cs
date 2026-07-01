@@ -213,7 +213,7 @@ public class BillingController(
             .Where(i => i.AccountId == accountId)
             .OrderByDescending(i => i.DateUtc)
             .Select(i => new InvoiceResponse(
-                i.InvoiceId, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.Status, i.PdfUrl
+                i.InvoiceId, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.InvoiceStatus!.Name, i.PdfUrl
             ))
             .ToListAsync();
 

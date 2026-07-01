@@ -53,9 +53,8 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
                     var prev = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == prevId);
                     if (prev is not null) { prev.PhoneNumberSid = null; prev.ForwardingPhone = null; }
                 }
-                reuse.Status = Entities.PhoneNumberStatus.Available;
+                reuse.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available;
                 reuse.AssignedAccountId = null;
-                reuse.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
             return reuse;
@@ -67,7 +66,7 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
         // First, try to find an available number in the pool for this country + carrier.
         var availableNumber = await db.PhoneNumbers
-            .Where(p => p.CountryId == countryId && p.ProviderId == providerId && p.Status == Entities.PhoneNumberStatus.Available)
+            .Where(p => p.CountryId == countryId && p.ProviderId == providerId && p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Available)
             .OrderBy(p => p.PurchasedAt)
             .FirstOrDefaultAsync();
 
@@ -85,7 +84,7 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
             CountryId = await ResolveCountryIdAsync(countryCode)
                 ?? throw new InvalidOperationException($"Unknown country code '{countryCode}'"),
             ProviderId = await ResolveActiveProviderIdAsync(),
-            Status = Entities.PhoneNumberStatus.Available,
+            PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available,
             MonthlyCost = 1.15m,
             PurchasedAt = DateTime.UtcNow
         };
@@ -103,10 +102,9 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
     public async Task AssignNumberToAccountAsync(Entities.PhoneNumber phoneNumber, Guid accountId)
     {
-        phoneNumber.Status = Entities.PhoneNumberStatus.Assigned;
+        phoneNumber.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Assigned;
         phoneNumber.AssignedAccountId = accountId;
         phoneNumber.AssignedAt = DateTime.UtcNow;
-        phoneNumber.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
     }
@@ -118,7 +116,7 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
     public async Task ReleaseNumberFromAccountAsync(Guid accountId)
     {
         var phoneNumber = await db.PhoneNumbers
-            .FirstOrDefaultAsync(p => p.AssignedAccountId == accountId && p.Status == Entities.PhoneNumberStatus.Assigned);
+            .FirstOrDefaultAsync(p => p.AssignedAccountId == accountId && p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Assigned);
 
         if (phoneNumber != null)
         {
@@ -127,17 +125,15 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
             if (reuseSids.Contains(phoneNumber.Sid))
             {
                 // Reusable test number — free it but never de-provision at the carrier.
-                phoneNumber.Status = Entities.PhoneNumberStatus.Available;
+                phoneNumber.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available;
             }
             else
             {
                 // Actually de-provision at the carrier before flipping DB status.
                 await telephony.ReleaseAsync(phoneNumber.Sid);
-                phoneNumber.Status = Entities.PhoneNumberStatus.Released;
+                phoneNumber.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Released;
             }
             phoneNumber.AssignedAccountId = null;
-            phoneNumber.ReleasedAt = DateTime.UtcNow;
-            phoneNumber.UpdatedAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
         }

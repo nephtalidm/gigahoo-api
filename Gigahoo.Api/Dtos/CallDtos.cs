@@ -3,7 +3,7 @@ namespace Gigahoo.Api.Dtos;
 public record ConversationResponse(
     Guid Id,
     string? CallerName,
-    string CallerPhone,
+    string CallerPhoneNumber,
     DateTime DateTimeUtc,
     int DurationSeconds,
     string Language,

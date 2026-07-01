@@ -9,9 +9,10 @@ public class Invoice
     public DateTime DateUtc { get; set; }
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "USD";
-    public string Status { get; set; } = "Paid";
+    public byte InvoiceStatusId { get; set; } = 1; // FK -> InvoiceStatus (1 = Paid)
     public string? PdfUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public Account Account { get; set; } = null!;
+    public InvoiceStatus? InvoiceStatus { get; set; }
 }

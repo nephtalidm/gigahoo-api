@@ -22,7 +22,9 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
 
         var conversationsQuery = db.Conversations.Where(c => c.AccountId == accountId);
 
-        var conversationsAnswered = await conversationsQuery.CountAsync(c => c.Status == "Answered" || c.Status == "Completed");
+        var conversationsAnswered = await conversationsQuery.CountAsync(c =>
+            c.ConversationStatusId == (byte)Entities.ConversationStatusId.Answered ||
+            c.ConversationStatusId == (byte)Entities.ConversationStatusId.Completed);
         var avgDuration = await conversationsQuery
             .Where(c => c.DurationSeconds > 0)
             .AverageAsync(c => (double?)c.DurationSeconds) ?? 0;
@@ -35,12 +37,12 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
             .Select(c => new ConversationResponse(
                 c.ConversationId,
                 c.CallerName,
-                c.CallerPhone,
+                c.CallerPhoneNumber,
                 c.DateTimeUtc,
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
-                c.Status
+                c.ConversationStatus!.Name
             ))
             .ToListAsync();
 
