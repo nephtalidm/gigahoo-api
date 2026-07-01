@@ -44,19 +44,19 @@ public class AccountController(
             .Include(a => a.Plan)
             .Include(a => a.Category)
             .Include(a => a.Region)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         // Check email uniqueness (only if email changed)
         if (account.NormalizedEmail != request.Email.ToLowerInvariant())
         {
-            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.Id != accountId);
+            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.AccountId != accountId);
             if (emailTaken) return Conflict(new { error = "This email is already registered" });
         }
 
         // Check phone uniqueness
         var normalizedPhone = request.BusinessPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
-        var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.Id != accountId);
+        var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.AccountId != accountId);
         if (phoneTaken) return Conflict(new { error = "This phone number is already in use" });
 
         // US and Canada share the +1 country code, so the area code (first 3
@@ -103,7 +103,7 @@ public class AccountController(
             return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
         // Resolve the business country (ISO-2) to its Country id. Leave null if
         // unknown — never fail signup over an unrecognized code.
-        account.CountryCodeId = (await db.Countries.FirstOrDefaultAsync(c => c.Code == request.CountryCode))?.Id;
+        account.CountryCodeId = (await db.Countries.FirstOrDefaultAsync(c => c.Code == request.CountryCode))?.CountryId;
         account.UpdatedAt = DateTime.UtcNow;
         // NOTE: deliberately NOT saving the account yet. For free signups we persist
         // the account only once a phone number has actually been provisioned.
@@ -127,28 +127,21 @@ public class AccountController(
                     var purchased = await twilio.PurchasePhoneNumberAsync(countryCode);
                     if (purchased is not null)
                     {
-                        number = new PhoneNumber
-                        {
-                            Sid = purchased.Sid, Number = purchased.PhoneNumber, CountryCode = countryCode,
-                            Provider = telephony.ProviderName, Status = PhoneNumberStatus.Available,
-                            MonthlyCost = 1.15m, PurchasedAt = DateTime.UtcNow
-                        };
-                        db.PhoneNumbers.Add(number);
-                        await db.SaveChangesAsync();
+                        number = await twilio.AddPurchasedNumberToPoolAsync(purchased, countryCode);
                     }
                 }
                 if (number is not null)
                 {
-                    await twilio.AssignNumberToAccountAsync(number, account.Id);
+                    await twilio.AssignNumberToAccountAsync(number, account.AccountId);
                     account.PhoneNumberSid = number.Sid;
-                    account.TelephonyProvider = number.Provider;
+                    account.TelephonyProvider = telephony.ProviderName;
                     account.ForwardingPhone = number.Number;
-                    await twilio.ConfigureWebhookAsync(number.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}");
+                    await twilio.ConfigureWebhookAsync(number.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}");
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Free plan number provisioning failed for account {Account}", account.Id);
+                logger.LogError(ex, "Free plan number provisioning failed for account {Account}", account.AccountId);
             }
 
             if (string.IsNullOrEmpty(account.PhoneNumberSid))
@@ -157,9 +150,9 @@ public class AccountController(
                 {
                     await email.SendAdminAlertAsync(
                         "Signup failed — no phone number available",
-                        $"Could not provision a phone number for a new free-plan signup.\n\nAccount: {account.Id}\nBusiness: {account.BusinessName}\nEmail: {account.Email}\nCountry: {countryCode}\nWhen: {DateTime.UtcNow:u}");
+                        $"Could not provision a phone number for a new free-plan signup.\n\nAccount: {account.AccountId}\nBusiness: {account.BusinessName}\nEmail: {account.Email}\nCountry: {countryCode}\nWhen: {DateTime.UtcNow:u}");
                 }
-                catch (Exception ex) { logger.LogError(ex, "Failed to send admin alert for provisioning failure {Account}", account.Id); }
+                catch (Exception ex) { logger.LogError(ex, "Failed to send admin alert for provisioning failure {Account}", account.AccountId); }
 
                 // No number — delete the auth-created account; keep no record.
                 db.Accounts.Remove(account);
@@ -172,12 +165,12 @@ public class AccountController(
             await db.SaveChangesAsync();
 
             try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, account.ForwardingPhone!); }
-            catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.Id); }
+            catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.AccountId); }
             var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
             if (!string.IsNullOrEmpty(ownerPhone))
             {
                 try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
-                catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.Id); }
+                catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.AccountId); }
             }
         }
         else
@@ -187,7 +180,7 @@ public class AccountController(
             if (plan is not null && string.IsNullOrEmpty(account.StripeCustomerId))
             {
                 try { account.StripeCustomerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName); }
-                catch (Exception ex) { logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.Id); }
+                catch (Exception ex) { logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.AccountId); }
             }
             await db.SaveChangesAsync();
         }
@@ -206,7 +199,7 @@ public class AccountController(
             .Include(a => a.Plan)
             .Include(a => a.Category)
             .Include(a => a.Region)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
         if (account is null) return NotFound();
         return Ok(await MapToResponse(account));
@@ -220,14 +213,14 @@ public class AccountController(
             .Include(a => a.Plan)
             .Include(a => a.Category)
             .Include(a => a.Region)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
         if (account is null) return NotFound();
 
         // Enforce email uniqueness across all accounts (any signup method).
         if (account.NormalizedEmail != request.Email.ToLowerInvariant())
         {
-            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.Id != accountId);
+            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.AccountId != accountId);
             if (emailTaken) return Conflict(new { error = "This email is already registered" });
         }
 
@@ -276,7 +269,7 @@ public class AccountController(
     public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         // Require the current password only when the password is the account's sole
@@ -301,7 +294,7 @@ public class AccountController(
     public async Task<IActionResult> LinkGoogle([FromBody] GoogleAuthRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         var payload = await googleAuth.ValidateIdTokenAsync(request.IdToken);
@@ -309,7 +302,7 @@ public class AccountController(
         if (!payload.EmailVerified) return BadRequest(new { error = "Google email is not verified" });
 
         // Don't steal a Google identity already linked to a different account.
-        var inUse = await db.Accounts.AnyAsync(a => a.GoogleSubjectId == payload.Subject && a.Id != accountId);
+        var inUse = await db.Accounts.AnyAsync(a => a.GoogleSubjectId == payload.Subject && a.AccountId != accountId);
         if (inUse) return Conflict(new { error = "This Google account is already linked to another account" });
 
         account.GoogleSubjectId = payload.Subject;
@@ -325,7 +318,7 @@ public class AccountController(
     public async Task<IActionResult> RequestEmailChange([FromBody] RequestEmailChangeRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         var newEmail = request.NewEmail.Trim();
@@ -336,7 +329,7 @@ public class AccountController(
         if (normalized == account.NormalizedEmail)
             return BadRequest(new { error = "This is already your email address" });
 
-        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.Id != accountId);
+        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.AccountId != accountId);
         if (taken) return Conflict(new { error = "This email is already registered" });
 
         var code = await otp.GenerateAndStoreAsync(newEmail, "EmailChange", TimeSpan.FromMinutes(15));
@@ -350,12 +343,12 @@ public class AccountController(
     public async Task<IActionResult> ConfirmEmailChange([FromBody] ConfirmEmailChangeRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         var newEmail = request.NewEmail.Trim();
         var normalized = newEmail.ToLowerInvariant();
-        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.Id != accountId);
+        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.AccountId != accountId);
         if (taken) return Conflict(new { error = "This email is already registered" });
 
         var valid = await otp.VerifyAsync(newEmail, "EmailChange", request.Code);
@@ -374,7 +367,7 @@ public class AccountController(
     public async Task<IActionResult> RequestPhoneChange([FromBody] RequestPhoneChangeRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         var newPhone = request.NewPhone.Trim();
@@ -397,7 +390,7 @@ public class AccountController(
     public async Task<IActionResult> ConfirmPhoneChange([FromBody] ConfirmPhoneChangeRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         // Authoritative area-code gate: re-check before applying the change, using
@@ -421,7 +414,7 @@ public class AccountController(
     public async Task<ActionResult<CallNotificationsResponse>> GetNotifications()
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
@@ -431,7 +424,7 @@ public class AccountController(
     public async Task<IActionResult> UpdateNotifications([FromBody] UpdateCallNotificationsRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         account.EmailCallNotifications = request.EmailCallNotifications;
@@ -446,7 +439,7 @@ public class AccountController(
     public async Task<ActionResult<VoiceSettingsResponse>> UpdateVoiceSettings([FromBody] UpdateVoiceSettingsRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         var greeting = string.IsNullOrWhiteSpace(request.GreetingMessage) ? null : request.GreetingMessage.Trim();
@@ -480,7 +473,7 @@ public class AccountController(
             return BadRequest(new { error = "Unsupported language." });
 
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
         account.AccountLanguage = request.Language.ToLowerInvariant();
@@ -512,7 +505,7 @@ public class AccountController(
             : "";
 
         return new AccountResponse(
-            account.Id,
+            account.AccountId,
             account.BusinessName ?? "",
             category?.Name ?? "",
             account.CategoryId ?? 0,

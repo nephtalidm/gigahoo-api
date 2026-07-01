@@ -5,7 +5,7 @@ namespace Gigahoo.Api.Entities;
 // payment providers can be added without schema churn.
 public class PaymentCustomer
 {
-    public int Id { get; set; }
+    public int PaymentCustomerId { get; set; }
     public Guid AccountId { get; set; }
     public int ProviderId { get; set; }                // FK -> Provider (payment provider)
     public string CustomerId { get; set; } = null!;    // the provider's customer id

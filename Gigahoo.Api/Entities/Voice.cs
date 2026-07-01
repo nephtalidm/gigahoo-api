@@ -5,7 +5,7 @@ namespace Gigahoo.Api.Entities;
 // voices and the dashboard + validation pick them up automatically.
 public class Voice
 {
-    public int Id { get; set; }
+    public int VoiceId { get; set; }
     public int ProviderId { get; set; }
     public Provider Provider { get; set; } = null!;
     public string ApiName { get; set; } = null!;  // provider voice id passed to the TTS engine

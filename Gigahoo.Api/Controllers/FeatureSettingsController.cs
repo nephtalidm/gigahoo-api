@@ -19,8 +19,8 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
     {
         var accountId = GetAccountId();
 
-        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
-        if (account.Plan.Id != 3) // Business only
+        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.AccountId == accountId);
+        if (account.Plan.PlanId != 3) // Business only
             return StatusCode(403, new { error = "Optional features require the Business plan" });
 
         return Ok(new FeatureSettingsResponse(
@@ -45,8 +45,8 @@ public class FeatureSettingsController(GigahooDbContext db) : ControllerBase
     {
         var accountId = GetAccountId();
 
-        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
-        if (account.Plan.Id != 3)
+        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.AccountId == accountId);
+        if (account.Plan.PlanId != 3)
             return StatusCode(403, new { error = "Optional features require the Business plan" });
 
         account.AnswerQuestions = request.AnswerQuestions;

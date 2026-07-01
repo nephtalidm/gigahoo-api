@@ -17,6 +17,7 @@ public interface ITwilioService
     Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl);
     Task ReleasePhoneNumberAsync(string phoneNumberSid);
     Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode);
+    Task<Entities.PhoneNumber> AddPurchasedNumberToPoolAsync(PurchasedPhoneNumber purchased, string countryCode);
     Task AssignNumberToAccountAsync(Entities.PhoneNumber phoneNumber, Guid accountId);
     Task ReleaseNumberFromAccountAsync(Guid accountId);
 }
@@ -34,6 +35,9 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
     public async Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode)
     {
+        var resolved = await ResolveCountryIdAsync(countryCode);
+        if (resolved is not short countryId) return null;
+
         // Testing: when reuse SIDs are configured, reuse the one matching this
         // country (detach from any prior account, mark Available) instead of buying.
         var reuseSids = (config["Telephony:ReuseNumberSids"] ?? "")
@@ -41,12 +45,12 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
         if (reuseSids.Length > 0)
         {
             var reuse = await db.PhoneNumbers
-                .FirstOrDefaultAsync(p => reuseSids.Contains(p.Sid) && p.CountryCode == countryCode);
+                .FirstOrDefaultAsync(p => reuseSids.Contains(p.Sid) && p.CountryId == countryId);
             if (reuse is not null)
             {
                 if (reuse.AssignedAccountId is Guid prevId)
                 {
-                    var prev = await db.Accounts.FirstOrDefaultAsync(a => a.Id == prevId);
+                    var prev = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == prevId);
                     if (prev is not null) { prev.PhoneNumberSid = null; prev.ForwardingPhone = null; }
                 }
                 reuse.Status = Entities.PhoneNumberStatus.Available;
@@ -57,14 +61,45 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
             return reuse;
         }
 
-        // First, try to find an available number in the pool for this country
+        // Pool numbers must match the active carrier so we never hand out a Twilio
+        // number while Telnyx is the configured provider (or vice-versa).
+        var providerId = await ResolveActiveProviderIdAsync();
+
+        // First, try to find an available number in the pool for this country + carrier.
         var availableNumber = await db.PhoneNumbers
-            .Where(p => p.CountryCode == countryCode && p.Status == Entities.PhoneNumberStatus.Available)
+            .Where(p => p.CountryId == countryId && p.ProviderId == providerId && p.Status == Entities.PhoneNumberStatus.Available)
             .OrderBy(p => p.PurchasedAt)
             .FirstOrDefaultAsync();
 
         return availableNumber;
     }
+
+    // Adds a freshly-purchased carrier number to the pool, resolving the Country
+    // and active-carrier Provider foreign keys from their codes.
+    public async Task<Entities.PhoneNumber> AddPurchasedNumberToPoolAsync(PurchasedPhoneNumber purchased, string countryCode)
+    {
+        var number = new Entities.PhoneNumber
+        {
+            Sid = purchased.Sid,
+            Number = purchased.PhoneNumber,
+            CountryId = await ResolveCountryIdAsync(countryCode)
+                ?? throw new InvalidOperationException($"Unknown country code '{countryCode}'"),
+            ProviderId = await ResolveActiveProviderIdAsync(),
+            Status = Entities.PhoneNumberStatus.Available,
+            MonthlyCost = 1.15m,
+            PurchasedAt = DateTime.UtcNow
+        };
+        db.PhoneNumbers.Add(number);
+        await db.SaveChangesAsync();
+        return number;
+    }
+
+    private async Task<short?> ResolveCountryIdAsync(string countryCode)
+        => (await db.Countries.FirstOrDefaultAsync(c => c.Code == countryCode))?.CountryId;
+
+    private async Task<int> ResolveActiveProviderIdAsync()
+        => (await db.Providers.FirstAsync(p =>
+                p.Code == telephony.ProviderName && p.ProviderTypeId == (byte)ProviderTypeId.Phone)).ProviderId;
 
     public async Task AssignNumberToAccountAsync(Entities.PhoneNumber phoneNumber, Guid accountId)
     {

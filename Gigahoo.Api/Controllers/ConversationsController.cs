@@ -39,7 +39,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(c => new ConversationResponse(
-                c.Id,
+                c.ConversationId,
                 c.CallerName,
                 c.CallerPhone,
                 c.DateTimeUtc,
@@ -60,12 +60,12 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
 
         var conversation = await db.Conversations
             .Include(c => c.Language)
-            .FirstOrDefaultAsync(c => c.Id == id && c.AccountId == accountId);
+            .FirstOrDefaultAsync(c => c.ConversationId == id && c.AccountId == accountId);
 
         if (conversation is null) return NotFound();
 
         return Ok(new ConversationResponse(
-            conversation.Id,
+            conversation.ConversationId,
             conversation.CallerName,
             conversation.CallerPhone,
             conversation.DateTimeUtc,

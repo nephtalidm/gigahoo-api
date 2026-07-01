@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class Account
 {
-    public Guid Id { get; set; }
+    public Guid AccountId { get; set; }
 
     // Auth identity (merged from User)
     public string? Email { get; set; }

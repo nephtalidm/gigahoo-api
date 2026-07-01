@@ -21,7 +21,7 @@ public class LookupController(GigahooDbContext db) : ControllerBase
 
         var countries = await query
             .OrderBy(c => c.Name)
-            .Select(c => new CountryResponse(c.Id, c.Name, c.Code, c.DialCode, c.Flag))
+            .Select(c => new CountryResponse(c.CountryId, c.Name, c.Code, c.DialCode, c.Flag))
             .ToListAsync();
 
         return Ok(countries);
@@ -33,7 +33,7 @@ public class LookupController(GigahooDbContext db) : ControllerBase
         var regions = await db.Regions
             .Where(r => r.CountryId == countryId)
             .OrderBy(r => r.Name)
-            .Select(r => new RegionResponse(r.Id, r.Name, r.Code))
+            .Select(r => new RegionResponse(r.RegionId, r.Name, r.Code))
             .ToListAsync();
 
         return Ok(regions);
@@ -44,7 +44,7 @@ public class LookupController(GigahooDbContext db) : ControllerBase
     {
         var categories = await db.BusinessCategories
             .OrderBy(c => c.Name)
-            .Select(c => new BusinessCategoryResponse(c.Id, c.Name))
+            .Select(c => new BusinessCategoryResponse(c.BusinessCategoryId, c.Name))
             .ToListAsync();
 
         return Ok(categories);
@@ -55,7 +55,7 @@ public class LookupController(GigahooDbContext db) : ControllerBase
     {
         var languages = await db.Languages
             .OrderBy(l => l.Name)
-            .Select(l => new LanguageResponse(l.Id, l.Name))
+            .Select(l => new LanguageResponse(l.LanguageId, l.Name))
             .ToListAsync();
 
         return Ok(languages);

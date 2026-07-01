@@ -4,7 +4,7 @@ namespace Gigahoo.Api.Entities;
 // with explicit ids so code/migrations can reference a type without a magic string.
 public class ProviderType
 {
-    public byte Id { get; set; }
+    public byte ProviderTypeId { get; set; }
     public string Name { get; set; } = null!;
     public ICollection<Provider> Providers { get; set; } = [];
 }

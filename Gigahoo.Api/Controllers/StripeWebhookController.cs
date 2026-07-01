@@ -79,9 +79,9 @@ public class StripeWebhookController(
             // Map plan from Stripe metadata or default to Starter
             var priceId = session.Metadata?.GetValueOrDefault("priceId");
             var plan = await db.Plans.FirstOrDefaultAsync(p =>
-                config[$"Stripe:PriceIds:{p.Id}"] == priceId);
+                config[$"Stripe:PriceIds:{p.PlanId}"] == priceId);
             if (plan is not null)
-                account.PlanId = plan.Id;
+                account.PlanId = plan.PlanId;
 
             // Initialize the billing period and reset usage metering for the new subscription.
             account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -91,7 +91,7 @@ public class StripeWebhookController(
             account.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            logger.LogInformation("Checkout completed for account {Account}, subscription {Sub}", account.Id, session.SubscriptionId);
+            logger.LogInformation("Checkout completed for account {Account}, subscription {Sub}", account.AccountId, session.SubscriptionId);
         }
     }
 
@@ -106,7 +106,7 @@ public class StripeWebhookController(
         // Record the invoice
         db.Invoices.Add(new Entities.Invoice
         {
-            AccountId = account.Id,
+            AccountId = account.AccountId,
             StripeInvoiceId = invoice.Id,
             InvoiceNumber = invoice.Number ?? $"INV-{DateTime.UtcNow:yyyyMMddHHmmss}",
             DateUtc = DateTime.UtcNow,
@@ -145,46 +145,34 @@ public class StripeWebhookController(
                     if (purchased is not null)
                     {
                         // Add to pool
-                        phoneNumber = new Entities.PhoneNumber
-                        {
-                            Sid = purchased.Sid,
-                            Number = purchased.PhoneNumber,
-                            CountryCode = countryCode,
-                            Provider = telephony.ProviderName,
-                            Status = Entities.PhoneNumberStatus.Available,
-                            MonthlyCost = 1.15m,
-                            PurchasedAt = DateTime.UtcNow
-                        };
-                        db.PhoneNumbers.Add(phoneNumber);
-                        await db.SaveChangesAsync();
-
+                        phoneNumber = await twilio.AddPurchasedNumberToPoolAsync(purchased, countryCode);
                         logger.LogInformation("Purchased new phone number {Number} and added to pool", purchased.PhoneNumber);
                     }
                     else
                     {
-                        logger.LogWarning("Failed to purchase phone number for account {Account}", account.Id);
+                        logger.LogWarning("Failed to purchase phone number for account {Account}", account.AccountId);
                     }
                 }
 
                 if (phoneNumber != null)
                 {
                     // Assign number to account
-                    await twilio.AssignNumberToAccountAsync(phoneNumber, account.Id);
+                    await twilio.AssignNumberToAccountAsync(phoneNumber, account.AccountId);
 
                     account.PhoneNumberSid = phoneNumber.Sid;
-                    account.TelephonyProvider = phoneNumber.Provider;
+                    account.TelephonyProvider = telephony.ProviderName;
                     account.ForwardingPhone = phoneNumber.Number;
 
                     // Configure webhook to point to voice agent
-                    var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
+                    var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}";
                     await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
 
-                    logger.LogInformation("Assigned phone number {Number} to account {Account} (fallback at invoice.paid)", phoneNumber.Number, account.Id);
+                    logger.LogInformation("Assigned phone number {Number} to account {Account} (fallback at invoice.paid)", phoneNumber.Number, account.AccountId);
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error provisioning phone number for account {Account}", account.Id);
+                logger.LogError(ex, "Error provisioning phone number for account {Account}", account.AccountId);
             }
         }
 
@@ -199,7 +187,7 @@ public class StripeWebhookController(
             }
             catch (Exception emailEx)
             {
-                logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.Id);
+                logger.LogError(emailEx, "Failed to send phone number email to account {Account}", account.AccountId);
             }
 
             // Also notify the owner by SMS.
@@ -212,13 +200,13 @@ public class StripeWebhookController(
                 }
                 catch (Exception smsEx)
                 {
-                    logger.LogError(smsEx, "Failed to send phone number SMS to account {Account}", account.Id);
+                    logger.LogError(smsEx, "Failed to send phone number SMS to account {Account}", account.AccountId);
                 }
             }
         }
 
         await db.SaveChangesAsync();
-        logger.LogInformation("Invoice {Id} recorded for account {Account}", invoice.Id, account.Id);
+        logger.LogInformation("Invoice {Id} recorded for account {Account}", invoice.Id, account.AccountId);
     }
 
     private async Task HandlePaymentFailed(Stripe.Invoice? invoice)
@@ -273,15 +261,15 @@ public class StripeWebhookController(
         {
             try
             {
-                await twilio.ReleaseNumberFromAccountAsync(account.Id);
+                await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
                 account.PhoneNumberSid = null;
                 account.TelephonyProvider = null;
                 account.ForwardingPhone = null;
-                logger.LogInformation("Released phone number back to pool for account {Account}", account.Id);
+                logger.LogInformation("Released phone number back to pool for account {Account}", account.AccountId);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error releasing phone number for account {Account}", account.Id);
+                logger.LogError(ex, "Error releasing phone number for account {Account}", account.AccountId);
             }
         }
 
@@ -289,6 +277,6 @@ public class StripeWebhookController(
         account.PlanId = 1; // Downgrade to Free
         await db.SaveChangesAsync();
 
-        logger.LogInformation("Account {Account} downgraded to Free after subscription cancellation", account.Id);
+        logger.LogInformation("Account {Account} downgraded to Free after subscription cancellation", account.AccountId);
     }
 }

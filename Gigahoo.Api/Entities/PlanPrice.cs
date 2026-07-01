@@ -6,7 +6,7 @@ namespace Gigahoo.Api.Entities;
 // display amount in that currency.
 public class PlanPrice
 {
-    public int Id { get; set; }
+    public int PlanPriceId { get; set; }
     public byte PlanId { get; set; }
     public string Currency { get; set; } = null!;   // ISO 4217, e.g. "USD", "MXN", "CAD"
     public int ProviderId { get; set; }              // payment provider this price belongs to (FK -> Provider, set per row)

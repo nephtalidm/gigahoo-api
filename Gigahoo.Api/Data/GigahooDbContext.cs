@@ -27,14 +27,14 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Plan
-        modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.Id);
+        modelBuilder.Entity<Plan>().ToTable("Plan").HasKey(e => e.PlanId);
 
         // ProviderType (LLM / Payment / Phone / SMS / Email lookup)
         modelBuilder.Entity<ProviderType>(e =>
         {
             e.ToTable("ProviderType");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Id).ValueGeneratedNever();
+            e.HasKey(x => x.ProviderTypeId);
+            e.Property(x => x.ProviderTypeId).ValueGeneratedNever();
             e.Property(x => x.Name).HasMaxLength(20);
             e.HasIndex(x => x.Name).IsUnique();
         });
@@ -43,7 +43,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<Provider>(e =>
         {
             e.ToTable("Provider");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.ProviderId);
             e.Property(x => x.Name).HasMaxLength(50);
             e.Property(x => x.Code).HasMaxLength(30);
             e.HasIndex(x => new { x.Code, x.ProviderTypeId }).IsUnique();
@@ -54,7 +54,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<Voice>(e =>
         {
             e.ToTable("Voice");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.VoiceId);
             e.Property(x => x.ApiName).HasMaxLength(64);
             e.Property(x => x.Label).HasMaxLength(128);
             e.HasIndex(x => new { x.ProviderId, x.ApiName }).IsUnique();
@@ -65,7 +65,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<PlanPrice>(e =>
         {
             e.ToTable("PlanPrice");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.PlanPriceId);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.ProviderPriceId).HasMaxLength(255);
             e.Property(x => x.Amount).HasPrecision(10, 2);
@@ -78,7 +78,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<PaymentCustomer>(e =>
         {
             e.ToTable("PaymentCustomer");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.PaymentCustomerId);
             e.Property(x => x.CustomerId).HasMaxLength(255);
             e.HasIndex(x => new { x.AccountId, x.ProviderId }).IsUnique();
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId);
@@ -86,13 +86,13 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         });
 
         // BusinessCategory
-        modelBuilder.Entity<BusinessCategory>().ToTable("BusinessCategory").HasKey(e => e.Id);
+        modelBuilder.Entity<BusinessCategory>().ToTable("BusinessCategory").HasKey(e => e.BusinessCategoryId);
 
         // Country
         modelBuilder.Entity<Country>(e =>
         {
             e.ToTable("Country");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.CountryId);
             e.HasIndex(x => x.Code).IsUnique();
             e.Property(x => x.Code).IsFixedLength().HasMaxLength(2);
             e.Property(x => x.Currency).HasMaxLength(3);
@@ -116,13 +116,13 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         });
 
         // Language
-        modelBuilder.Entity<Language>().ToTable("Language").HasKey(e => e.Id);
+        modelBuilder.Entity<Language>().ToTable("Language").HasKey(e => e.LanguageId);
 
         // Region
         modelBuilder.Entity<Region>(e =>
         {
             e.ToTable("Region");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.RegionId);
             e.HasOne(x => x.Country).WithMany().HasForeignKey(x => x.CountryId).HasConstraintName("FK_Region_Country").OnDelete(DeleteBehavior.NoAction);
             e.HasIndex(x => new { x.CountryId, x.Code }).IsUnique();
         });
@@ -133,7 +133,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             // The Account table has an AFTER UPDATE trigger (TR_Account_UpdatedAt),
             // so EF must not use the SQL OUTPUT clause for inserts/updates.
             e.ToTable("Account", tb => tb.HasTrigger("TR_Account_UpdatedAt"));
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.AccountId);
             e.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("[NormalizedEmail] IS NOT NULL");
             e.HasIndex(x => x.NormalizedPhone).IsUnique().HasFilter("[NormalizedPhone] IS NOT NULL");
             e.HasIndex(x => x.GoogleSubjectId).IsUnique().HasFilter("[GoogleSubjectId] IS NOT NULL");
@@ -153,7 +153,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<Conversation>(e =>
         {
             e.ToTable("Conversation");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.ConversationId);
             e.HasOne(x => x.Account).WithMany(x => x.Conversations).HasForeignKey(x => x.AccountId);
             e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
             e.HasIndex(x => new { x.AccountId, x.DateTimeUtc }).IsDescending(false, true);
@@ -164,7 +164,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<Invoice>(e =>
         {
             e.ToTable("Invoice");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.InvoiceId);
             e.HasOne(x => x.Account).WithMany(x => x.Invoices).HasForeignKey(x => x.AccountId);
             e.HasIndex(x => new { x.AccountId, x.DateUtc }).IsDescending(false, true);
             e.Property(x => x.Amount).HasColumnType("decimal(10,2)");
@@ -174,7 +174,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<OtpCode>(e =>
         {
             e.ToTable("OtpCode");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.OtpCodeId);
             e.HasIndex(x => new { x.Identifier, x.Type }).HasFilter("[IsUsed] = 0");
         });
 
@@ -182,7 +182,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<ContactSubmission>(e =>
         {
             e.ToTable("ContactSubmission");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.ContactSubmissionId);
             e.HasIndex(x => x.CreatedAt).IsDescending();
         });
 
@@ -190,15 +190,16 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         modelBuilder.Entity<PhoneNumber>(e =>
         {
             e.ToTable("PhoneNumber");
-            e.HasKey(x => x.Id);
+            e.HasKey(x => x.PhoneNumberId);
             e.HasIndex(x => x.Sid).IsUnique();
             e.HasIndex(x => x.Status);
-            e.HasIndex(x => new { x.CountryCode, x.Status });
+            e.HasIndex(x => new { x.CountryId, x.Status });
             e.HasIndex(x => x.AssignedAccountId);
-            e.Property(x => x.CountryCode).IsFixedLength().HasMaxLength(2);
             e.Property(x => x.MonthlyCost).HasColumnType("decimal(10,2)");
             e.Property(x => x.Status).HasConversion<string>(); // Store enum as string
             e.HasOne(x => x.AssignedAccount).WithMany().HasForeignKey(x => x.AssignedAccountId);
+            e.HasOne(x => x.Country).WithMany().HasForeignKey(x => x.CountryId);
+            e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
         });
     }
 }

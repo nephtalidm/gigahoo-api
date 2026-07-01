@@ -18,7 +18,7 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
     public async Task<ActionResult<DashboardOverviewResponse>> GetOverview()
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
+        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.AccountId == accountId);
 
         var conversationsQuery = db.Conversations.Where(c => c.AccountId == accountId);
 
@@ -33,7 +33,7 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
             .OrderByDescending(c => c.DateTimeUtc)
             .Take(4)
             .Select(c => new ConversationResponse(
-                c.Id,
+                c.ConversationId,
                 c.CallerName,
                 c.CallerPhone,
                 c.DateTimeUtc,

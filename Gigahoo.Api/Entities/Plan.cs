@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class Plan
 {
-    public byte Id { get; set; }
+    public byte PlanId { get; set; }
     public string Name { get; set; } = null!;
     public decimal PriceMonthly { get; set; }
     public int IncludedMinutes { get; set; }

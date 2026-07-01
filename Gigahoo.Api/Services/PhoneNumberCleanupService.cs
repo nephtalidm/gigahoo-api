@@ -38,7 +38,7 @@ public class PhoneNumberCleanupService(
                 // await SendWarningEmailAsync(account, inactiveDays);
 
                 // Release the phone number back to pool
-                await twilio.ReleaseNumberFromAccountAsync(account.Id);
+                await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
 
                 // Clear the phone number reference from account
                 account.PhoneNumberSid = null;
@@ -47,12 +47,12 @@ public class PhoneNumberCleanupService(
 
                 logger.LogInformation(
                     "Released phone number from inactive account {AccountId} (last activity: {LastActivity})",
-                    account.Id,
+                    account.AccountId,
                     account.Conversations.Max(c => (DateTime?)c.DateTimeUtc) ?? account.CreatedAt);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to release phone number from account {AccountId}", account.Id);
+                logger.LogError(ex, "Failed to release phone number from account {AccountId}", account.AccountId);
             }
         }
 
@@ -78,7 +78,7 @@ public class PhoneNumberCleanupService(
             .Where(p => p.AssignedAt != null && p.AssignedAt < cutoff)
             .Join(db.Accounts,
                 p => p.AssignedAccountId,
-                a => a.Id,
+                a => a.AccountId,
                 (p, a) => new { Phone = p, Account = a })
             .Where(x => x.Account.PhoneNumberSid != null && x.Account.StripeSubscriptionId == null)
             .Select(x => x.Account)
@@ -90,18 +90,18 @@ public class PhoneNumberCleanupService(
         {
             try
             {
-                await twilio.ReleaseNumberFromAccountAsync(account.Id);
+                await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
 
                 account.PhoneNumberSid = null;
                 account.TelephonyProvider = null;
                 account.ForwardingPhone = null;
                 account.UpdatedAt = DateTime.UtcNow;
 
-                logger.LogInformation("Released abandoned phone reservation for account {AccountId}", account.Id);
+                logger.LogInformation("Released abandoned phone reservation for account {AccountId}", account.AccountId);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to release abandoned phone reservation for account {AccountId}", account.Id);
+                logger.LogError(ex, "Failed to release abandoned phone reservation for account {AccountId}", account.AccountId);
             }
         }
     }

@@ -5,7 +5,7 @@ namespace Gigahoo.Api.Entities;
 // that PlanPrice / PaymentCustomer / Account reference by Id instead of magic strings.
 public class Provider
 {
-    public int Id { get; set; }
+    public int ProviderId { get; set; }
     public string Name { get; set; } = null!;   // display name, e.g. "Stripe"
     public string Code { get; set; } = null!;   // machine code, e.g. "stripe"
     public byte ProviderTypeId { get; set; }

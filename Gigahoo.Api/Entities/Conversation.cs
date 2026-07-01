@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class Conversation
 {
-    public Guid Id { get; set; }
+    public Guid ConversationId { get; set; }
     public Guid AccountId { get; set; }
     public string? CallerName { get; set; }
     public string CallerPhone { get; set; } = null!;

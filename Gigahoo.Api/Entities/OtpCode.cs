@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class OtpCode
 {
-    public long Id { get; set; }
+    public long OtpCodeId { get; set; }
     public string Identifier { get; set; } = null!;
     public string Code { get; set; } = null!;
     public string Type { get; set; } = null!;

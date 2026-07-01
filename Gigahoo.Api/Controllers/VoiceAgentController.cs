@@ -29,7 +29,7 @@ public class VoiceAgentController(
             .Include(a => a.Category)
             .Include(a => a.Region)
             .Include(a => a.Plan)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
 
         if (account is null) return NotFound(new { error = "Account not found" });
 
@@ -66,7 +66,7 @@ public class VoiceAgentController(
         }
 
         return Ok(new VoiceAgentAccountResponse(
-            account.Id,
+            account.AccountId,
             account.BusinessName,
             account.Category?.Name ?? "Other",
             account.Category?.ServiceDescription ?? "service need",
@@ -103,7 +103,7 @@ public class VoiceAgentController(
     {
         var account = await db.Accounts
             .Include(a => a.Plan)
-            .FirstOrDefaultAsync(a => a.Id == accountId);
+            .FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound(new { error = "Account not found" });
 
         var conversation = new Conversation
@@ -140,7 +140,7 @@ public class VoiceAgentController(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to send minutes-exhausted SMS for account {Account}", account.Id);
+                    logger.LogError(ex, "Failed to send minutes-exhausted SMS for account {Account}", account.AccountId);
                 }
             }
 
@@ -152,7 +152,7 @@ public class VoiceAgentController(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to send minutes-exhausted email for account {Account}", account.Id);
+                    logger.LogError(ex, "Failed to send minutes-exhausted email for account {Account}", account.AccountId);
                 }
             }
 
@@ -177,7 +177,7 @@ public class VoiceAgentController(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to send call-summary email for account {Account}", account.Id);
+                logger.LogError(ex, "Failed to send call-summary email for account {Account}", account.AccountId);
             }
         }
 
@@ -194,12 +194,12 @@ public class VoiceAgentController(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Failed to send call-summary SMS for account {Account}", account.Id);
+                    logger.LogError(ex, "Failed to send call-summary SMS for account {Account}", account.AccountId);
                 }
             }
         }
 
-        return Ok(new { conversationId = conversation.Id });
+        return Ok(new { conversationId = conversation.ConversationId });
     }
 }
 

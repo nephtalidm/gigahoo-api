@@ -28,7 +28,7 @@ public class BillingController(
         var accountId = GetAccountId();
         var account = await db.Accounts
             .Include(a => a.Plan)
-            .FirstAsync(a => a.Id == accountId);
+            .FirstAsync(a => a.AccountId == accountId);
 
         var remaining = Math.Max(0, account.Plan.IncludedMinutes - account.MinutesUsed);
         var usagePercent = account.Plan.IncludedMinutes > 0
@@ -55,7 +55,7 @@ public class BillingController(
         var plans = await db.Plans.Where(p => p.IsActive).OrderBy(p => p.DisplayOrder).ToListAsync();
 
         var result = plans.Select(p => new PlanResponse(
-            p.Id,
+            p.PlanId,
             p.Name,
             p.PriceMonthly,
             p.IncludedMinutes,
@@ -94,14 +94,14 @@ public class BillingController(
         var prices = defaultProvider is null
             ? new List<Entities.PlanPrice>()
             : await db.PlanPrices
-                .Where(pp => pp.Currency == currency && pp.IsActive && pp.ProviderId == defaultProvider.Id)
+                .Where(pp => pp.Currency == currency && pp.IsActive && pp.ProviderId == defaultProvider.ProviderId)
                 .ToListAsync();
 
         var result = plans.Select(p =>
         {
             decimal amount = p.PriceMonthly == 0
                 ? 0m
-                : prices.FirstOrDefault(pp => pp.PlanId == p.Id)?.Amount ?? p.PriceMonthly;
+                : prices.FirstOrDefault(pp => pp.PlanId == p.PlanId)?.Amount ?? p.PriceMonthly;
             return new PublicPlanPrice(p.Name, amount);
         }).ToList();
 
@@ -112,7 +112,7 @@ public class BillingController(
     public async Task<ActionResult<CheckoutResponse>> CreateCheckout([FromBody] CheckoutRequest request)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.Id == accountId);
+        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.AccountId == accountId);
         var plan = await db.Plans.FindAsync(request.PlanId);
 
         if (plan is null) return NotFound(new { error = "Plan not found" });
@@ -145,7 +145,7 @@ public class BillingController(
 
         // Price comes from the PlanPrice table for that currency. If it isn't set up,
         // fail explicitly rather than defaulting to a currency.
-        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.Id && pp.Currency == currency && pp.ProviderId == providerRow.Id && pp.IsActive);
+        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.PlanId && pp.Currency == currency && pp.ProviderId == providerRow.ProviderId && pp.IsActive);
         if (planPrice is null || string.IsNullOrEmpty(planPrice.ProviderPriceId))
             return BadRequest(new { error = $"No {provider.Name} price configured for plan '{plan.Name}' in {currency}" });
         var priceId = planPrice.ProviderPriceId;
@@ -165,45 +165,34 @@ public class BillingController(
                     var purchased = await twilio.PurchasePhoneNumberAsync(numberCountryCode);
                     if (purchased is not null)
                     {
-                        phoneNumber = new Entities.PhoneNumber
-                        {
-                            Sid = purchased.Sid,
-                            Number = purchased.PhoneNumber,
-                            CountryCode = numberCountryCode,
-                            Provider = telephony.ProviderName,
-                            Status = Entities.PhoneNumberStatus.Available,
-                            MonthlyCost = 1.15m,
-                            PurchasedAt = DateTime.UtcNow
-                        };
-                        db.PhoneNumbers.Add(phoneNumber);
-                        await db.SaveChangesAsync();
+                        phoneNumber = await twilio.AddPurchasedNumberToPoolAsync(purchased, numberCountryCode);
                         logger.LogInformation("Purchased new phone number {Number} and added to pool", purchased.PhoneNumber);
                     }
                 }
 
                 if (phoneNumber == null)
                 {
-                    logger.LogWarning("Could not reserve a phone number for account {Account} before checkout", account.Id);
+                    logger.LogWarning("Could not reserve a phone number for account {Account} before checkout", account.AccountId);
                     return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
                 }
 
                 // Assign the number to the account so PhoneNumberSid is set, then
                 // point its voice webhook at the agent (same as the webhook handler).
-                await twilio.AssignNumberToAccountAsync(phoneNumber, account.Id);
+                await twilio.AssignNumberToAccountAsync(phoneNumber, account.AccountId);
                 account.PhoneNumberSid = phoneNumber.Sid;
-                account.TelephonyProvider = phoneNumber.Provider;
+                account.TelephonyProvider = telephony.ProviderName;
                 account.ForwardingPhone = phoneNumber.Number;
 
-                var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.Id}";
+                var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}";
                 await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);
 
                 account.UpdatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
-                logger.LogInformation("Reserved phone number {Number} for account {Account} before checkout", phoneNumber.Number, account.Id);
+                logger.LogInformation("Reserved phone number {Number} for account {Account} before checkout", phoneNumber.Number, account.AccountId);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error reserving phone number for account {Account} before checkout", account.Id);
+                logger.LogError(ex, "Error reserving phone number for account {Account} before checkout", account.AccountId);
                 return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
             }
         }
@@ -224,7 +213,7 @@ public class BillingController(
             .Where(i => i.AccountId == accountId)
             .OrderByDescending(i => i.DateUtc)
             .Select(i => new InvoiceResponse(
-                i.Id, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.Status, i.PdfUrl
+                i.InvoiceId, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.Status, i.PdfUrl
             ))
             .ToListAsync();
 
@@ -235,7 +224,7 @@ public class BillingController(
     public async Task<IActionResult> OpenPortal()
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
 
         var customerId = await payments.Default.EnsureCustomerAsync(account);
 
@@ -256,7 +245,7 @@ public class BillingController(
     public async Task<IActionResult> CreateSetupIntent([FromQuery] string? provider)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
 
         var paymentProvider = provider is null ? payments.Default : payments.Get(provider);
 
@@ -301,7 +290,7 @@ public class BillingController(
     public async Task<IActionResult> DeletePaymentMethod(string id, [FromQuery] string? provider)
     {
         var accountId = GetAccountId();
-        var account = await db.Accounts.FirstAsync(a => a.Id == accountId);
+        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
 
         var paymentProvider = provider is null ? payments.Default : payments.Get(provider);
 

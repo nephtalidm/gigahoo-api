@@ -75,7 +75,7 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
 
         if (account is null) return NotFound();
 
-        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.NewEmail.ToLowerInvariant() && a.Id != accountId);
+        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.NewEmail.ToLowerInvariant() && a.AccountId != accountId);
         if (existing != null)
             return BadRequest(new { error = "Email already in use" });
 
@@ -96,7 +96,7 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
 
         if (account is null) return NotFound();
 
-        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == request.NewPhone && a.Id != accountId);
+        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == request.NewPhone && a.AccountId != accountId);
         if (existing != null)
             return BadRequest(new { error = "Phone number already in use" });
 

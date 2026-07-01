@@ -22,7 +22,7 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
                 $"No Provider row found for payment provider '{Name}'. Run the provider-tables migration.");
 
         var existing = await db.PaymentCustomers
-            .FirstOrDefaultAsync(pc => pc.AccountId == account.Id && pc.ProviderId == providerRow.Id);
+            .FirstOrDefaultAsync(pc => pc.AccountId == account.AccountId && pc.ProviderId == providerRow.ProviderId);
         if (existing is not null)
             return existing.CustomerId;
 
@@ -36,8 +36,8 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
 
         db.PaymentCustomers.Add(new PaymentCustomer
         {
-            AccountId = account.Id,
-            ProviderId = providerRow.Id,
+            AccountId = account.AccountId,
+            ProviderId = providerRow.ProviderId,
             CustomerId = customer.Id,
         });
 

@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class Invoice
 {
-    public Guid Id { get; set; }
+    public Guid InvoiceId { get; set; }
     public Guid AccountId { get; set; }
     public string? StripeInvoiceId { get; set; }
     public string InvoiceNumber { get; set; } = null!;

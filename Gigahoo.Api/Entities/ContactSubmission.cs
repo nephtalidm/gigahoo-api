@@ -2,7 +2,7 @@ namespace Gigahoo.Api.Entities;
 
 public class ContactSubmission
 {
-    public long Id { get; set; }
+    public long ContactSubmissionId { get; set; }
     public string Name { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string Subject { get; set; } = null!;
