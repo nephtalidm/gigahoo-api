@@ -34,7 +34,6 @@ public class Account
     public string? AddressLine2 { get; set; }
     public string? City { get; set; }
     public short? RegionId { get; set; }
-    public string? RegionCustom { get; set; }
     public string? PostalCode { get; set; }
     public short? CountryCodeId { get; set; }
 

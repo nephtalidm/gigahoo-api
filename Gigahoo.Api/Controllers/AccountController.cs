@@ -89,7 +89,7 @@ public class AccountController(
         account.AddressLine1 = request.AddressLine1;
         account.AddressLine2 = request.AddressLine2;
         account.City = request.City;
-        account.RegionCustom = request.Region;
+        account.RegionId = request.RegionId;
         account.PostalCode = request.PostalCode;
         // Default the dashboard language to the locale the user signed up in,
         // falling back to English when missing or unsupported.
@@ -237,7 +237,6 @@ public class AccountController(
         account.AddressLine2 = request.AddressLine2;
         account.City = request.City;
         account.RegionId = request.RegionId;
-        account.RegionCustom = request.RegionCustom;
         account.PostalCode = request.PostalCode;
         account.CountryCodeId = request.CountryId;
         account.UpdatedAt = DateTime.UtcNow;
@@ -493,11 +492,7 @@ public class AccountController(
         if (account.RegionId.HasValue)
         {
             var region = await db.Regions.FindAsync(account.RegionId);
-            regionName = region?.Name ?? account.RegionCustom;
-        }
-        else
-        {
-            regionName = account.RegionCustom;
+            regionName = region?.Name;
         }
 
         var billingPeriod = account.BillingPeriodStart.HasValue && account.BillingPeriodEnd.HasValue

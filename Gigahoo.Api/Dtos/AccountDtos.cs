@@ -31,9 +31,9 @@ public record CreateAccountRequest
     [Required, MaxLength(100)]
     public string City { get; init; } = default!;
 
-    // Free-text state/province/region; maps to Account.RegionCustom.
-    [Required, MaxLength(100)]
-    public string Region { get; init; } = default!;
+    // The selected state/province — a Region id from the country's region list.
+    [Required]
+    public short? RegionId { get; init; }
 
     [Required, MaxLength(20)]
     public string PostalCode { get; init; } = default!;
@@ -90,9 +90,6 @@ public record UpdateAccountRequest
     public string? City { get; init; }
 
     public short? RegionId { get; init; }
-
-    [MaxLength(100)]
-    public string? RegionCustom { get; init; }
 
     [MaxLength(20)]
     public string? PostalCode { get; init; }

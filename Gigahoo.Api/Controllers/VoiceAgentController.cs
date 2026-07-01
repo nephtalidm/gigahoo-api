@@ -58,11 +58,7 @@ public class VoiceAgentController(
         string? regionName = null;
         if (account.RegionId.HasValue)
         {
-            regionName = account.Region?.Name ?? account.RegionCustom;
-        }
-        else
-        {
-            regionName = account.RegionCustom;
+            regionName = account.Region?.Name;
         }
 
         return Ok(new VoiceAgentAccountResponse(
