@@ -317,7 +317,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var caller = string.IsNullOrWhiteSpace(callerName) ? callerPhone : callerName;
         message.Subject = $"New call summary — {caller}";
 
-        var duration = $"{durationSeconds / 60}:{durationSeconds % 60:D2}";
+        var duration = $"{durationSeconds / 60} min {durationSeconds % 60} sec";
         var callerNameDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(callerName) ? "Unknown" : callerName);
         var callerPhoneDisplay = System.Net.WebUtility.HtmlEncode(callerPhone);
         var summaryDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(summary) ? "No summary available." : summary);
@@ -358,7 +358,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                             </tr>
                                             <tr>
                                                 <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">Duration</td>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{duration}} min</td>
+                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{duration}}</td>
                                             </tr>
                                         </table>
 
