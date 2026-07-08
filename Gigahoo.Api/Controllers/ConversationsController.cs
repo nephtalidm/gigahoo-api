@@ -47,6 +47,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
                 c.Address,
+                c.IsEmergency,
                 c.ConversationStatus!.Name
             ))
             .ToListAsync();
@@ -75,6 +76,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             conversation.Language?.Name ?? "English",
             conversation.Summary,
             conversation.Address,
+            conversation.IsEmergency,
             conversation.ConversationStatus!.Name
         ));
     }

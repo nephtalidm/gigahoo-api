@@ -11,6 +11,7 @@ public class Conversation
     public byte? LanguageId { get; set; }
     public string? Summary { get; set; }
     public string? Address { get; set; }
+    public bool IsEmergency { get; set; }
     public byte ConversationStatusId { get; set; } = 1; // FK -> ConversationStatus (1 = Missed)
     public byte ConversationTypeId { get; set; } = 1;   // FK -> ConversationType (1 = Phone Call)
     public DateTime CreatedAt { get; set; }

@@ -9,6 +9,7 @@ public record ConversationResponse(
     string Language,
     string? Summary,
     string? Address,
+    bool IsEmergency,
     string Status
 );
 

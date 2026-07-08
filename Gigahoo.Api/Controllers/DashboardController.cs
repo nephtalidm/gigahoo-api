@@ -43,6 +43,7 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
                 c.Address,
+                c.IsEmergency,
                 c.ConversationStatus!.Name
             ))
             .ToListAsync();

@@ -114,6 +114,7 @@ public class VoiceAgentController(
             LanguageId = request.LanguageId ?? 1, // Default to English
             Summary = request.Summary,
             Address = request.Address,
+            IsEmergency = request.IsEmergency,
             ConversationStatusId = (byte)(Enum.TryParse<Entities.ConversationStatusId>(request.Status, ignoreCase: true, out var cs)
                 ? cs : Entities.ConversationStatusId.Missed),
             ConversationTypeId = (byte)Entities.ConversationTypeId.PhoneCall,
@@ -247,5 +248,6 @@ public record CreateConversationRequest(
     string? Summary,
     string Status,
     string? Address = null,
-    string? Language = null
+    string? Language = null,
+    bool IsEmergency = false
 );
