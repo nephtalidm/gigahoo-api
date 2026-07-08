@@ -171,7 +171,10 @@ public class VoiceAgentController(
                     account.BusinessName ?? "there",
                     request.CallerName,
                     request.CallerPhoneNumber,
+                    request.Address,
+                    request.Language,
                     request.DurationSeconds,
+                    conversation.DateTimeUtc,
                     request.Summary);
             }
             catch (Exception ex)
@@ -240,5 +243,7 @@ public record CreateConversationRequest(
     int DurationSeconds,
     byte? LanguageId,
     string? Summary,
-    string Status
+    string Status,
+    string? Address = null,
+    string? Language = null
 );

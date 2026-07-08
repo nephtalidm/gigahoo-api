@@ -13,7 +13,7 @@ public interface IEmailService
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
-    Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, int durationSeconds, string? summary);
+    Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, DateTime callTimeUtc, string? summary);
     Task SendAdminAlertAsync(string subject, string message);
 }
 
@@ -308,7 +308,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
-    public async Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, int durationSeconds, string? summary)
+    public async Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, DateTime callTimeUtc, string? summary)
     {
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
@@ -317,9 +317,14 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var caller = string.IsNullOrWhiteSpace(callerName) ? callerPhone : callerName;
         message.Subject = $"New call summary — {caller}";
 
-        var duration = $"{durationSeconds / 60} min {durationSeconds % 60} sec";
-        var callerNameDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(callerName) ? "Unknown" : callerName);
-        var callerPhoneDisplay = System.Net.WebUtility.HtmlEncode(callerPhone);
+        // Metadata row
+        var dateTimeDisplay = callTimeUtc.ToString("MMM d, yyyy, HH:mm 'UTC'");
+        var duration = $"{durationSeconds / 3600}h {(durationSeconds % 3600) / 60}m";
+        var languageDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(language) ? "—" : language);
+        // Info sections
+        var callerNameDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(callerName) ? "your caller" : callerName);
+        var callerPhoneDisplay = System.Net.WebUtility.HtmlEncode(FormatPhone(callerPhone));
+        var addressDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(address) ? "—" : address);
         var summaryDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(summary) ? "No summary available." : summary);
 
         var body = $$"""
@@ -343,28 +348,38 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                     <td style="padding: 24px 40px 32px;">
                                         <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">New call summary</h1>
                                         <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4b5563; text-align: center;">
-                                            Hi {{businessName}}, your AI receptionist just handled a call. Here are the details.
+                                            Hi {{businessName}}, your AI receptionist just handled a call from <strong style="color: #111827;">{{callerNameDisplay}}</strong>.
                                         </p>
 
-                                        <!-- Call details -->
+                                        <!-- Metadata: date/time · duration · language -->
                                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; border-radius: 8px; margin-bottom: 24px;">
                                             <tr>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; width: 120px;">Caller</td>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600;">{{callerNameDisplay}}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">Phone</td>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{callerPhoneDisplay}}</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #6b7280; border-top: 1px solid #e5e7eb;">Duration</td>
-                                                <td style="padding: 12px 16px; font-size: 14px; color: #111827; font-weight: 600; border-top: 1px solid #e5e7eb;">{{duration}}</td>
+                                                <td style="padding: 14px 12px; text-align: center; width: 40%; border-right: 1px solid #e5e7eb;">
+                                                    <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Date &amp; time</div>
+                                                    <div style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 4px;">{{dateTimeDisplay}}</div>
+                                                </td>
+                                                <td style="padding: 14px 12px; text-align: center; width: 30%; border-right: 1px solid #e5e7eb;">
+                                                    <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Duration</div>
+                                                    <div style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 4px;">{{duration}}</div>
+                                                </td>
+                                                <td style="padding: 14px 12px; text-align: center; width: 30%;">
+                                                    <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Language</div>
+                                                    <div style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 4px;">{{languageDisplay}}</div>
+                                                </td>
                                             </tr>
                                         </table>
 
-                                        <!-- Summary -->
-                                        <h2 style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #111827;">Summary</h2>
-                                        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #4b5563; white-space: pre-wrap;">{{summaryDisplay}}</p>
+                                        <!-- Section 1: Phone -->
+                                        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Phone</h2>
+                                        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.5; color: #111827; font-weight: 600;">{{callerPhoneDisplay}}</p>
+
+                                        <!-- Section 2: Address -->
+                                        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Address</h2>
+                                        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.5; color: #111827; font-weight: 600;">{{addressDisplay}}</p>
+
+                                        <!-- Section 3: Summary -->
+                                        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Summary</h2>
+                                        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #374151; white-space: pre-wrap;">{{summaryDisplay}}</p>
                                     </td>
                                 </tr>
 
@@ -386,6 +401,18 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
 
         message.Body = new TextPart("html") { Text = body };
         await SendAsync(message);
+    }
+
+    // Format a NANP number as "(XXX) XXX-XXXX"; non-NANP inputs are returned unchanged.
+    private static string FormatPhone(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "Unknown";
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in raw) if (char.IsDigit(c)) sb.Append(c);
+        var digits = sb.ToString();
+        if (digits.Length == 11 && digits[0] == '1') digits = digits[1..];
+        if (digits.Length == 10) return $"({digits[..3]}) {digits[3..6]}-{digits[6..]}";
+        return raw;
     }
 
     private async Task SendAsync(MimeMessage message)
