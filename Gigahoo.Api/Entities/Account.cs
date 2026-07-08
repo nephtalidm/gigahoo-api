@@ -55,6 +55,10 @@ public class Account
     public string? GreetingMessage { get; set; }
     public string? AgentVoice { get; set; }
 
+    // Per-call hard cap (kill switch): the longest a single call may run before the voice agent
+    // forcibly ends it, no matter how productive the call is. NULL = no cap. Minutes.
+    public int? MaximumCallMinutes { get; set; }
+
     // Feature settings (Business plan only)
     public bool AnswerQuestions { get; set; }
     public string? ServicesInfo { get; set; }

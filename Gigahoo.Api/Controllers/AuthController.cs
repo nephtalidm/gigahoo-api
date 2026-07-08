@@ -47,6 +47,15 @@ public class AuthController(
             }
             else
             {
+                // NEW signup — enforce the region gate BEFORE creating the account, so an
+                // unsupported-market user never gets a persisted account (a later Google login
+                // would otherwise find it "existing" and skip the gate, letting them straight in).
+                if (!string.IsNullOrEmpty(request.Country) &&
+                    !await db.Countries.AnyAsync(c => c.Code == request.Country && c.IsSupported))
+                {
+                    return StatusCode(403, new { error = "region_signup_restricted" });
+                }
+
                 isNew = true;
                 account = new Account
                 {

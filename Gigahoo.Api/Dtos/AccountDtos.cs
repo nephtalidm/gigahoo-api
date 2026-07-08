@@ -132,6 +132,7 @@ public record AccountResponse(
     bool SmsCallNotifications,
     string? GreetingMessage,
     string? AgentVoice,
+    int? MaximumCallMinutes,
     string AccountLanguage
 );
 
@@ -143,7 +144,8 @@ public record UpdateAccountLanguageRequest
 
 public record VoiceSettingsResponse(
     string? Greeting,
-    string? AgentVoice
+    string? AgentVoice,
+    int? MaximumCallMinutes
 );
 
 public record UpdateVoiceSettingsRequest
@@ -153,6 +155,11 @@ public record UpdateVoiceSettingsRequest
 
     [MaxLength(50)]
     public string? AgentVoice { get; init; }
+
+    // Per-call hard cap in minutes. NULL = no cap. Bounded to a sane range so it can't be
+    // set to 0/negative or something absurd.
+    [Range(1, 120)]
+    public int? MaximumCallMinutes { get; init; }
 }
 
 public record CallNotificationsResponse(

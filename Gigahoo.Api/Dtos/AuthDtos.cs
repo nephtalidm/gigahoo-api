@@ -35,6 +35,11 @@ public record GoogleAuthRequest
 {
     [Required, MaxLength(4096)]
     public string IdToken { get; init; } = default!;
+
+    // The visitor's market (ISO-2), used to gate NEW-account signups from non-supported
+    // regions — mirrors the magic-link / SMS flows. Optional; existing accounts always log in.
+    [MaxLength(2)]
+    public string? Country { get; init; }
 }
 
 public record AuthResponse(

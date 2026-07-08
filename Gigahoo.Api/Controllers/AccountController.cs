@@ -457,12 +457,18 @@ public class AccountController(
                 return BadRequest(new { error = "Unknown voice selection." });
         }
 
+        // Per-call hard cap: NULL clears it (no limit); otherwise it must be within range.
+        var maxCallMinutes = request.MaximumCallMinutes;
+        if (maxCallMinutes is not null && (maxCallMinutes < 1 || maxCallMinutes > 120))
+            return BadRequest(new { error = "Maximum call length must be between 1 and 120 minutes." });
+
         account.GreetingMessage = greeting;
         account.AgentVoice = agentVoice;
+        account.MaximumCallMinutes = maxCallMinutes;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice));
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes));
     }
 
     [HttpPut("language")]
@@ -533,6 +539,7 @@ public class AccountController(
             account.SmsCallNotifications,
             account.GreetingMessage,
             account.AgentVoice,
+            account.MaximumCallMinutes,
             account.AccountLanguage ?? ""
         );
     }

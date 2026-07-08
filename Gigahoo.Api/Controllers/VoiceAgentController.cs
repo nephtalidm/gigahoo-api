@@ -87,7 +87,8 @@ public class VoiceAgentController(
             minutesRemaining,
             canAnswer,
             greetingMessage,
-            account.AgentVoice
+            account.AgentVoice,
+            account.MaximumCallMinutes
         ));
     }
 
@@ -220,7 +221,8 @@ public record VoiceAgentAccountResponse(
     int MinutesRemaining,
     bool CanAnswer,
     string GreetingMessage,
-    string? AgentVoice
+    string? AgentVoice,
+    int? MaximumCallMinutes
 );
 
 public record VoiceAgentFeatureSettings(
