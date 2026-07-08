@@ -18,13 +18,13 @@ public class TelnyxSmsProvider(IConfiguration config, IHttpClientFactory httpCli
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", config["Telnyx:ApiKey"]);
 
-            // Send via a messaging profile so Telnyx selects the from-number.
-            var payload = new
-            {
-                messaging_profile_id = config["Telnyx:MessagingProfileId"],
-                to = toE164,
-                text = body
-            };
+            // Pin the sender number when configured (Telnyx:SmsFromNumber); otherwise fall back to
+            // letting the messaging profile pick one. An explicit `from` stops Telnyx choosing a
+            // wrong/unregistered number from the profile.
+            var fromNumber = config["Telnyx:SmsFromNumber"];
+            object payload = string.IsNullOrWhiteSpace(fromNumber)
+                ? new { messaging_profile_id = config["Telnyx:MessagingProfileId"], to = toE164, text = body }
+                : new { from = fromNumber, messaging_profile_id = config["Telnyx:MessagingProfileId"], to = toE164, text = body };
 
             var response = await client.PostAsJsonAsync("v2/messages", payload);
             if (!response.IsSuccessStatusCode)
