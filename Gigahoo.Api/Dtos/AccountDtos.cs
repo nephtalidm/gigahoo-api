@@ -133,7 +133,8 @@ public record AccountResponse(
     string? GreetingMessage,
     string? AgentVoice,
     int? MaximumCallMinutes,
-    string AccountLanguage
+    string AccountLanguage,
+    string? TimeZone
 );
 
 public record UpdateAccountLanguageRequest

@@ -111,6 +111,10 @@ public static class TimeZoneResolver
         ["Zacatecas"] = "America/Mexico_City",
     };
 
+    /// <summary>The IANA timezone id for an account region (e.g. "America/Vancouver"), or null if unmapped.</summary>
+    public static string? ResolveIana(string? region)
+        => region is not null && RegionToIana.TryGetValue(region, out var iana) ? iana : null;
+
     /// <summary>Format a UTC time in the account region's local timezone, e.g. "Jul 8, 2026, 11:53 AM (UTC-07:00)".</summary>
     public static string FormatLocal(DateTime utc, string? region)
     {

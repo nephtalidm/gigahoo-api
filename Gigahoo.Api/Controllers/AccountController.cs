@@ -540,7 +540,8 @@ public class AccountController(
             account.GreetingMessage,
             account.AgentVoice,
             account.MaximumCallMinutes,
-            account.AccountLanguage ?? ""
+            account.AccountLanguage ?? "",
+            Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName)
         );
     }
 }
