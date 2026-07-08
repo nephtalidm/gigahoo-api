@@ -434,6 +434,23 @@ public class AccountController(
         return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
     }
 
+    [HttpPut("questions")]
+    public async Task<IActionResult> UpdateQuestions([FromBody] UpdateQuestionsRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (account is null) return NotFound();
+
+        account.CollectName = request.CollectName;
+        account.CollectPhone = request.CollectPhone;
+        account.CollectAddress = request.CollectAddress;
+        account.CollectEmergency = request.CollectEmergency;
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new { request.CollectName, request.CollectPhone, request.CollectAddress, request.CollectEmergency });
+    }
+
     [HttpPut("voice-settings")]
     public async Task<ActionResult<VoiceSettingsResponse>> UpdateVoiceSettings([FromBody] UpdateVoiceSettingsRequest request)
     {
@@ -541,7 +558,11 @@ public class AccountController(
             account.AgentVoice,
             account.MaximumCallMinutes,
             account.AccountLanguage ?? "",
-            Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName)
+            Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName),
+            account.CollectName,
+            account.CollectPhone,
+            account.CollectAddress,
+            account.CollectEmergency
         );
     }
 }

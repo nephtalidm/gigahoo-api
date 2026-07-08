@@ -325,6 +325,16 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var callerPhoneDisplay = System.Net.WebUtility.HtmlEncode(FormatPhone(callerPhone));
         var addressDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(address) ? "—" : address);
         var summaryDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(summary) ? "No summary available." : summary);
+        // Hide the Phone / Address sections entirely when the account has that "Question" turned off
+        // (the voice agent sends empty values for disabled fields).
+        const string sectionHead = "margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;";
+        const string sectionBody = "margin: 0 0 20px; font-size: 16px; line-height: 1.5; color: #111827; font-weight: 600;";
+        var phoneSection = string.IsNullOrWhiteSpace(callerPhone)
+            ? ""
+            : $"""<h2 style="{sectionHead}">Phone</h2><p style="{sectionBody}">{callerPhoneDisplay}</p>""";
+        var addressSection = string.IsNullOrWhiteSpace(address)
+            ? ""
+            : $"""<h2 style="{sectionHead}">Address</h2><p style="{sectionBody}">{addressDisplay}</p>""";
 
         var body = $$"""
             <!DOCTYPE html>
@@ -368,13 +378,9 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                             </tr>
                                         </table>
 
-                                        <!-- Section 1: Phone -->
-                                        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Phone</h2>
-                                        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.5; color: #111827; font-weight: 600;">{{callerPhoneDisplay}}</p>
-
-                                        <!-- Section 2: Address -->
-                                        <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Address</h2>
-                                        <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.5; color: #111827; font-weight: 600;">{{addressDisplay}}</p>
+                                        <!-- Phone + Address sections (omitted entirely when the question is off) -->
+                                        {{phoneSection}}
+                                        {{addressSection}}
 
                                         <!-- Section 3: Summary -->
                                         <h2 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em;">Summary</h2>

@@ -51,6 +51,12 @@ public class Account
     public bool EmailCallNotifications { get; set; } = true;
     public bool SmsCallNotifications { get; set; } = true;
 
+    // Per-account "Questions" — which details the agent collects (default on). Off = don't ask/collect, and hide downstream.
+    public bool CollectName { get; set; } = true;
+    public bool CollectPhone { get; set; } = true;
+    public bool CollectAddress { get; set; } = true;
+    public bool CollectEmergency { get; set; } = true;
+
     // AI voice agent settings: custom call greeting + selected Qwen voice (NULL = default).
     public string? GreetingMessage { get; set; }
     public string? AgentVoice { get; set; }

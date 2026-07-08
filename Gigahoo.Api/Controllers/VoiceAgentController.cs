@@ -88,7 +88,11 @@ public class VoiceAgentController(
             canAnswer,
             greetingMessage,
             account.AgentVoice,
-            account.MaximumCallMinutes
+            account.MaximumCallMinutes,
+            account.CollectName,
+            account.CollectPhone,
+            account.CollectAddress,
+            account.CollectEmergency
         ));
     }
 
@@ -228,7 +232,11 @@ public record VoiceAgentAccountResponse(
     bool CanAnswer,
     string GreetingMessage,
     string? AgentVoice,
-    int? MaximumCallMinutes
+    int? MaximumCallMinutes,
+    bool CollectName,
+    bool CollectPhone,
+    bool CollectAddress,
+    bool CollectEmergency
 );
 
 public record VoiceAgentFeatureSettings(

@@ -134,7 +134,11 @@ public record AccountResponse(
     string? AgentVoice,
     int? MaximumCallMinutes,
     string AccountLanguage,
-    string? TimeZone
+    string? TimeZone,
+    bool CollectName,
+    bool CollectPhone,
+    bool CollectAddress,
+    bool CollectEmergency
 );
 
 public record UpdateAccountLanguageRequest
@@ -166,6 +170,13 @@ public record UpdateVoiceSettingsRequest
 public record CallNotificationsResponse(
     bool EmailCallNotifications,
     bool SmsCallNotifications
+);
+
+public record UpdateQuestionsRequest(
+    bool CollectName,
+    bool CollectPhone,
+    bool CollectAddress,
+    bool CollectEmergency
 );
 
 public record UpdateCallNotificationsRequest
