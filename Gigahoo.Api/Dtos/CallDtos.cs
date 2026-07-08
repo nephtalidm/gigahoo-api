@@ -8,6 +8,7 @@ public record ConversationResponse(
     int DurationSeconds,
     string Language,
     string? Summary,
+    string? Address,
     string Status
 );
 

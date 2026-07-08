@@ -112,6 +112,7 @@ public class VoiceAgentController(
             DurationSeconds = request.DurationSeconds,
             LanguageId = request.LanguageId ?? 1, // Default to English
             Summary = request.Summary,
+            Address = request.Address,
             ConversationStatusId = (byte)(Enum.TryParse<Entities.ConversationStatusId>(request.Status, ignoreCase: true, out var cs)
                 ? cs : Entities.ConversationStatusId.Missed),
             ConversationTypeId = (byte)Entities.ConversationTypeId.PhoneCall,
