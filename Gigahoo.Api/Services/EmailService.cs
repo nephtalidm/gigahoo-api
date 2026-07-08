@@ -13,7 +13,7 @@ public interface IEmailService
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
-    Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, DateTime callTimeUtc, string? summary);
+    Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, string dateTimeDisplay, string? summary);
     Task SendAdminAlertAsync(string subject, string message);
 }
 
@@ -308,7 +308,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
-    public async Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, DateTime callTimeUtc, string? summary)
+    public async Task SendCallSummaryAsync(string toEmail, string businessName, string? callerName, string callerPhone, string? address, string? language, int durationSeconds, string dateTimeDisplay, string? summary)
     {
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
@@ -317,8 +317,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var caller = string.IsNullOrWhiteSpace(callerName) ? callerPhone : callerName;
         message.Subject = $"New call summary — {caller}";
 
-        // Metadata row
-        var dateTimeDisplay = callTimeUtc.ToString("MMM d, yyyy, HH:mm 'UTC'");
+        // Metadata row (dateTimeDisplay is already localized to the account's timezone by the caller)
         var duration = $"{durationSeconds / 3600}h {(durationSeconds % 3600) / 60}m";
         var languageDisplay = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(language) ? "—" : language);
         // Info sections

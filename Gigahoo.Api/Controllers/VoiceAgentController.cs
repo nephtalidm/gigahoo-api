@@ -100,6 +100,7 @@ public class VoiceAgentController(
     {
         var account = await db.Accounts
             .Include(a => a.Plan)
+            .Include(a => a.Region)
             .FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound(new { error = "Account not found" });
 
@@ -175,7 +176,7 @@ public class VoiceAgentController(
                     request.Address,
                     request.Language,
                     request.DurationSeconds,
-                    conversation.DateTimeUtc,
+                    Gigahoo.Api.Services.TimeZoneResolver.FormatLocal(conversation.DateTimeUtc, account.Region?.Name),
                     request.Summary);
             }
             catch (Exception ex)
