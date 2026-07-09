@@ -21,16 +21,15 @@ public class VoiceController(
     private static readonly HashSet<string> CosyInstructVoices =
         new(StringComparer.OrdinalIgnoreCase) { "longanyang", "longanhuan", "longanhuan_v3", "longhuhu_v3" };
 
-    // CosyVoice instruct requires a FIXED Chinese template + a supported emotion value
-    // (neutral|happy|sad|angry|fearful|surprised|disgusted). Free-text English is rejected
-    // (err 428). The style keys map onto the usable positive/neutral emotions.
+    // CosyVoice's native emotion values (used directly — no mapping).
+    private static readonly HashSet<string> CosyEmotions = new(StringComparer.OrdinalIgnoreCase)
+        { "neutral", "happy", "sad", "angry", "fearful", "surprised", "disgusted" };
+
+    // CosyVoice instruct requires a FIXED Chinese template wrapping a native emotion value
+    // (free-text English is rejected, err 428). Pass the selected emotion straight through.
     private static string StyleInstruction(string? style)
     {
-        var emotion = style switch
-        {
-            "warm" or "friendly" or "energetic" => "happy",
-            _ => "neutral", // professional, calm
-        };
+        var emotion = style is not null && CosyEmotions.Contains(style) ? style.ToLowerInvariant() : "neutral";
         return $"你说话的情感是{emotion}。";
     }
 

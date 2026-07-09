@@ -480,7 +480,7 @@ public class AccountController(
 
         // Voice style / personality — validate against the allowed set (NULL = default professional).
         var agentStyle = string.IsNullOrWhiteSpace(request.AgentStyle) ? null : request.AgentStyle.Trim().ToLowerInvariant();
-        string[] allowedStyles = ["professional", "warm", "friendly", "energetic", "calm"];
+        string[] allowedStyles = ["neutral", "happy", "sad", "angry", "fearful", "surprised", "disgusted"];
         if (agentStyle is not null && !allowedStyles.Contains(agentStyle))
             return BadRequest(new { error = "Unknown voice style." });
 
