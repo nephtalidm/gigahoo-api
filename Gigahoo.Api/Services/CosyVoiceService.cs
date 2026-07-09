@@ -65,11 +65,13 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
             ["volume"] = 50,
             ["rate"] = 1.0,
             ["pitch"] = 1.0,
+            ["seed"] = 0,
+            ["type"] = 0,
         };
         if (!string.IsNullOrWhiteSpace(instruction))
             parameters["instruction"] = instruction.Length > 128 ? instruction[..128] : instruction;
 
-        await SendJsonAsync(ws, new
+        var runTask = new
         {
             header = new { action = "run-task", task_id = taskId, streaming = "duplex" },
             payload = new
@@ -81,7 +83,9 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
                 input = new { },
                 parameters,
             },
-        }, token);
+        };
+        logger.LogInformation("CosyVoice run-task JSON: {Json}", JsonSerializer.Serialize(runTask));
+        await SendJsonAsync(ws, runTask, token);
 
         // The task protocol is ORDERED: we must wait for `task-started` before sending the text.
         // Sending continue-task/finish-task up front races task setup — the text is sometimes
