@@ -1,4 +1,5 @@
 using Gigahoo.Api.Data;
+using Gigahoo.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -19,14 +20,19 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<VoiceResponse>>> Get()
     {
-        var voices = await db.Voices
+        var rows = await db.Voices
             .Where(v => v.IsActive && v.Provider.Code == "cosyvoice" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
-            .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault))
+            .Select(v => new { v.ApiName, v.Label, v.IsDefault })
             .ToListAsync();
+
+        // Attach each voice's instruct "context" options (scenarios/roles/identities) from the catalog.
+        var voices = rows
+            .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault, InstructCatalog.OptionsFor(v.ApiName)))
+            .ToList();
 
         return Ok(voices);
     }
 }
 
-public record VoiceResponse(string ApiName, string Label, bool IsDefault);
+public record VoiceResponse(string ApiName, string Label, bool IsDefault, IReadOnlyList<InstructOption> Options);

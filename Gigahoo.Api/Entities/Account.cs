@@ -60,8 +60,10 @@ public class Account
     // AI voice agent settings: custom call greeting + selected Qwen voice (NULL = default).
     public string? GreetingMessage { get; set; }
     public string? AgentVoice { get; set; }
-    // Voice "style"/personality baseline: professional|warm|friendly|energetic|calm. NULL = professional.
+    // Voice emotion (CosyVoice native emotion value: neutral|happy|sad|angry|fearful|surprised|disgusted).
     public string? AgentStyle { get; set; }
+    // Optional CosyVoice instruct context key ("scenario:…"|"role:…"|"identity:…"); pairs with AgentStyle.
+    public string? AgentInstruct { get; set; }
 
     // Per-call hard cap (kill switch): the longest a single call may run before the voice agent
     // forcibly ends it, no matter how productive the call is. Minutes. Defaults to 10;

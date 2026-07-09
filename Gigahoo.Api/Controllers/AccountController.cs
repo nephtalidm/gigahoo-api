@@ -484,14 +484,20 @@ public class AccountController(
         if (agentStyle is not null && !allowedStyles.Contains(agentStyle))
             return BadRequest(new { error = "Unknown voice style." });
 
+        // Optional instruct "context" (scenario/role/identity) — must be valid for the selected voice.
+        var agentInstruct = string.IsNullOrWhiteSpace(request.AgentInstruct) ? null : request.AgentInstruct.Trim();
+        if (agentInstruct is not null && (agentVoice is null || !Gigahoo.Api.Services.InstructCatalog.IsValidContext(agentVoice, agentInstruct)))
+            agentInstruct = null;
+
         account.GreetingMessage = greeting;
         account.AgentVoice = agentVoice;
         account.MaximumCallMinutes = maxCallMinutes;
         account.AgentStyle = agentStyle;
+        account.AgentInstruct = agentInstruct;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes, account.AgentStyle));
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes, account.AgentStyle, account.AgentInstruct));
     }
 
     [HttpPut("language")]
@@ -569,7 +575,8 @@ public class AccountController(
             account.CollectPhone,
             account.CollectAddress,
             account.CollectEmergency,
-            account.AgentStyle
+            account.AgentStyle,
+            account.AgentInstruct
         );
     }
 }

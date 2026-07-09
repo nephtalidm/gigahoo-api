@@ -17,22 +17,6 @@ public class VoiceController(
     ICosyVoiceService cosyVoice,
     ILogger<VoiceController> logger) : ControllerBase
 {
-    // CosyVoice-v3-flash preset voices that accept the natural-language instruct (style/emotion).
-    private static readonly HashSet<string> CosyInstructVoices =
-        new(StringComparer.OrdinalIgnoreCase) { "longanyang", "longanhuan", "longanhuan_v3", "longhuhu_v3" };
-
-    // CosyVoice's native emotion values (used directly — no mapping).
-    private static readonly HashSet<string> CosyEmotions = new(StringComparer.OrdinalIgnoreCase)
-        { "neutral", "happy", "sad", "angry", "fearful", "surprised", "disgusted" };
-
-    // CosyVoice instruct requires a FIXED Chinese template wrapping a native emotion value
-    // (free-text English is rejected, err 428). Pass the selected emotion straight through.
-    private static string StyleInstruction(string? style)
-    {
-        var emotion = style is not null && CosyEmotions.Contains(style) ? style.ToLowerInvariant() : "neutral";
-        return $"你说话的情感是{emotion}。";
-    }
-
     /// <summary>
     /// Synthesize the given greeting text in the given voice and return WAV audio,
     /// so the dashboard can play a live sample of the user's actual greeting.
@@ -60,8 +44,8 @@ public class VoiceController(
             byte[] wav;
             if (voiceRow.Provider.Code == "cosyvoice")
             {
-                // Style/emotion via CosyVoice's instruct — only for instruct-capable voices.
-                var instruction = CosyInstructVoices.Contains(voice!) ? StyleInstruction(request.Style) : null;
+                // Emotion + optional scenario/role context → the required Chinese instruct template.
+                var instruction = InstructCatalog.Build(voice!, request.Style, request.Instruct);
                 wav = await cosyVoice.SynthesizeAsync(text, voice!, instruction, HttpContext.RequestAborted);
             }
             else
@@ -83,4 +67,4 @@ public class VoiceController(
     }
 }
 
-public record VoiceSampleRequest(string? Text, string? Voice, string? Style);
+public record VoiceSampleRequest(string? Text, string? Voice, string? Style, string? Instruct);
