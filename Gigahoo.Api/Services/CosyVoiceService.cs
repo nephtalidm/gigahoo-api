@@ -40,6 +40,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
 
     private async Task<byte[]> SynthesizeOnceAsync(string text, string voice, string? instruction, CancellationToken ct)
     {
+        logger.LogInformation("CosyVoice synth: voice={Voice} instruct=[{Instruct}]", voice, instruction ?? "(none)");
         var apiKey = config["DASHSCOPE_API_KEY"] ?? config["Qwen:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("DASHSCOPE_API_KEY is not configured.");
