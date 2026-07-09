@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace Gigahoo.Api.Services;
@@ -22,6 +23,13 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
     private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference";
     private const string Model = "cosyvoice-v3-flash";
     private const int SampleRate = 22050; // CosyVoice's documented default; 24000 is rejected (err 428).
+
+    // Serialize the Chinese instruct as LITERAL UTF-8 (not \uXXXX escapes) — the CosyVoice instruct
+    // parser rejects the escaped form (err 428). Relaxed encoder passes CJK/punctuation through.
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     public async Task<byte[]> SynthesizeAsync(string text, string voice, string? instruction, CancellationToken ct = default)
     {
@@ -84,7 +92,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
                 parameters,
             },
         };
-        logger.LogInformation("CosyVoice run-task JSON: {Json}", JsonSerializer.Serialize(runTask));
+        logger.LogInformation("CosyVoice run-task JSON: {Json}", JsonSerializer.Serialize(runTask, JsonOpts));
         await SendJsonAsync(ws, runTask, token);
 
         // The task protocol is ORDERED: we must wait for `task-started` before sending the text.
@@ -179,7 +187,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
 
     private static async Task SendJsonAsync(ClientWebSocket ws, object message, CancellationToken ct)
     {
-        var json = JsonSerializer.Serialize(message);
+        var json = JsonSerializer.Serialize(message, JsonOpts);
         var bytes = Encoding.UTF8.GetBytes(json);
         await ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
     }
