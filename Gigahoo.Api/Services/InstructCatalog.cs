@@ -82,13 +82,13 @@ public static class InstructCatalog
                 var val = contextKey[(idx + 1)..];
                 return type switch
                 {
-                    "scenario" => $"你正在进行{val}，你说话的情感是{e}.",
-                    "role" => $"你现在说话的角色是{val}，你说话的情感是{e}.",
-                    "identity" => $"你正在以一个{val}的身份说话，你说话的情感是{e}.",
-                    _ => $"你说话的情感是{e}.",
+                    "scenario" => $"你正在进行{val}，你说话的情感是{e}。",
+                    "role" => $"你现在说话的角色是{val}，你说话的情感是{e}。",
+                    "identity" => $"你正在以一个{val}的身份说话，你说话的情感是{e}。",
+                    _ => $"你说话的情感是{e}。",
                 };
             }
         }
-        return $"你说话的情感是{e}.";
+        return $"你说话的情感是{e}。";
     }
 }
