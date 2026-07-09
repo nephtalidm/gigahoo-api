@@ -138,7 +138,8 @@ public record AccountResponse(
     bool CollectName,
     bool CollectPhone,
     bool CollectAddress,
-    bool CollectEmergency
+    bool CollectEmergency,
+    string? AgentStyle
 );
 
 public record UpdateAccountLanguageRequest
@@ -150,7 +151,8 @@ public record UpdateAccountLanguageRequest
 public record VoiceSettingsResponse(
     string? Greeting,
     string? AgentVoice,
-    int? MaximumCallMinutes
+    int? MaximumCallMinutes,
+    string? AgentStyle
 );
 
 public record UpdateVoiceSettingsRequest
@@ -165,6 +167,10 @@ public record UpdateVoiceSettingsRequest
     // set to 0/negative or something absurd.
     [Range(1, 120)]
     public int? MaximumCallMinutes { get; init; }
+
+    // Voice style / personality key (professional|warm|friendly|energetic|calm). NULL = default.
+    [MaxLength(30)]
+    public string? AgentStyle { get; init; }
 }
 
 public record CallNotificationsResponse(

@@ -92,7 +92,8 @@ public class VoiceAgentController(
             account.CollectName,
             account.CollectPhone,
             account.CollectAddress,
-            account.CollectEmergency
+            account.CollectEmergency,
+            account.AgentStyle
         ));
     }
 
@@ -236,7 +237,8 @@ public record VoiceAgentAccountResponse(
     bool CollectName,
     bool CollectPhone,
     bool CollectAddress,
-    bool CollectEmergency
+    bool CollectEmergency,
+    string? AgentStyle
 );
 
 public record VoiceAgentFeatureSettings(

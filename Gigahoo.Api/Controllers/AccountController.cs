@@ -479,13 +479,20 @@ public class AccountController(
         if (maxCallMinutes is not null && (maxCallMinutes < 1 || maxCallMinutes > 120))
             return BadRequest(new { error = "Maximum call length must be between 1 and 120 minutes." });
 
+        // Voice style / personality — validate against the allowed set (NULL = default professional).
+        var agentStyle = string.IsNullOrWhiteSpace(request.AgentStyle) ? null : request.AgentStyle.Trim().ToLowerInvariant();
+        string[] allowedStyles = ["professional", "warm", "friendly", "energetic", "calm"];
+        if (agentStyle is not null && !allowedStyles.Contains(agentStyle))
+            return BadRequest(new { error = "Unknown voice style." });
+
         account.GreetingMessage = greeting;
         account.AgentVoice = agentVoice;
         account.MaximumCallMinutes = maxCallMinutes;
+        account.AgentStyle = agentStyle;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes));
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes, account.AgentStyle));
     }
 
     [HttpPut("language")]
@@ -562,7 +569,8 @@ public class AccountController(
             account.CollectName,
             account.CollectPhone,
             account.CollectAddress,
-            account.CollectEmergency
+            account.CollectEmergency,
+            account.AgentStyle
         );
     }
 }
