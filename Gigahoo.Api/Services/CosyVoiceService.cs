@@ -21,7 +21,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
 {
     // Managed DashScope task-based inference WS (Singapore/international), same host as the omni.
     private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference";
-    private const string Model = "cosyvoice-v3.5-flash";
+    private const string Model = "cosyvoice-v3-flash";
     private const int SampleRate = 22050; // CosyVoice's documented default; 24000 is rejected (err 428).
 
     // Serialize the Chinese instruct as LITERAL UTF-8 (not \uXXXX escapes) — the CosyVoice instruct
