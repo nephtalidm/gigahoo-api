@@ -14,8 +14,22 @@ namespace Gigahoo.Api.Controllers;
 public class VoiceController(
     GigahooDbContext db,
     IVoiceSampleService voiceSamples,
+    ICosyVoiceService cosyVoice,
     ILogger<VoiceController> logger) : ControllerBase
 {
+    // CosyVoice-v3-flash preset voices that accept the natural-language instruct (style/emotion).
+    private static readonly HashSet<string> CosyInstructVoices =
+        new(StringComparer.OrdinalIgnoreCase) { "longanyang", "longanhuan", "longanhuan_v3", "longhuhu_v3" };
+
+    private static string StyleInstruction(string? style) => style switch
+    {
+        "warm" => "Speak in a warm, caring tone.",
+        "friendly" => "Speak in a friendly, approachable tone.",
+        "energetic" => "Speak in an upbeat, energetic tone.",
+        "calm" => "Speak in a calm, reassuring tone.",
+        _ => "Speak in a polished, professional tone.",
+    };
+
     /// <summary>
     /// Synthesize the given greeting text in the given voice and return WAV audio,
     /// so the dashboard can play a live sample of the user's actual greeting.
@@ -32,15 +46,25 @@ public class VoiceController(
         // Validate the voice against the ACTIVE voices the LLM provider (Qwen) offers — the same
         // data-driven check as saving the agent voice, so the preview allow-list can't drift.
         var voice = request.Voice?.Trim();
-        var isValidVoice = !string.IsNullOrWhiteSpace(voice) && await db.Voices.AnyAsync(v =>
-            v.IsActive && v.ApiName == voice &&
-            v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1);
-        if (!isValidVoice)
+        var voiceRow = string.IsNullOrWhiteSpace(voice) ? null : await db.Voices
+            .Include(v => v.Provider)
+            .FirstOrDefaultAsync(v => v.IsActive && v.ApiName == voice && v.Provider.ProviderTypeId == 1);
+        if (voiceRow is null)
             return BadRequest(new { error = "Invalid voice" });
 
         try
         {
-            var wav = await voiceSamples.SynthesizeAsync(text, voice!, request.Style, HttpContext.RequestAborted);
+            byte[] wav;
+            if (voiceRow.Provider.Code == "cosyvoice")
+            {
+                // Style/emotion via CosyVoice's instruct — only for instruct-capable voices.
+                var instruction = CosyInstructVoices.Contains(voice!) ? StyleInstruction(request.Style) : null;
+                wav = await cosyVoice.SynthesizeAsync(text, voice!, instruction, HttpContext.RequestAborted);
+            }
+            else
+            {
+                wav = await voiceSamples.SynthesizeAsync(text, voice!, request.Style, HttpContext.RequestAborted);
+            }
             return File(wav, "audio/wav");
         }
         catch (InvalidOperationException ex)

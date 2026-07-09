@@ -20,7 +20,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     public async Task<ActionResult<List<VoiceResponse>>> Get()
     {
         var voices = await db.Voices
-            .Where(v => v.IsActive && v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1)
+            .Where(v => v.IsActive && v.Provider.Code == "cosyvoice" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
             .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault))
             .ToListAsync();

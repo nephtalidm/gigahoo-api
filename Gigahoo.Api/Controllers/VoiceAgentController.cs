@@ -61,6 +61,14 @@ public class VoiceAgentController(
             regionName = account.Region?.Name;
         }
 
+        // The omni realtime session only accepts a qwen voice. If the account picked a CosyVoice
+        // voice (for the TTS pipeline), it must NOT be sent to the omni or the session errors —
+        // fall back to the omni default (null) here so live calls never break on a TTS voice.
+        var omniVoice = account.AgentVoice;
+        if (omniVoice is not null && !await db.Voices.AnyAsync(v =>
+                v.IsActive && v.ApiName == omniVoice && v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1))
+            omniVoice = null;
+
         return Ok(new VoiceAgentAccountResponse(
             account.AccountId,
             account.BusinessName,
@@ -87,7 +95,7 @@ public class VoiceAgentController(
             minutesRemaining,
             canAnswer,
             greetingMessage,
-            account.AgentVoice,
+            omniVoice,
             account.MaximumCallMinutes,
             account.CollectName,
             account.CollectPhone,

@@ -1,0 +1,178 @@
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+
+namespace Gigahoo.Api.Services;
+
+/// <summary>
+/// Synthesizes a short voice sample via Alibaba DashScope's MANAGED CosyVoice
+/// (cosyvoice-v3-flash) — no self-hosting. Uses the same DashScope host as the omni,
+/// the task-based streaming WebSocket (run-task / continue-task / finish-task).
+/// The optional <c>instruction</c> carries the style/emotion (managed instruct control).
+/// Returns ready-to-play WAV bytes.
+/// </summary>
+public interface ICosyVoiceService
+{
+    Task<byte[]> SynthesizeAsync(string text, string voice, string? instruction, CancellationToken ct = default);
+}
+
+public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> logger) : ICosyVoiceService
+{
+    // Managed DashScope task-based inference WS (Singapore/international), same host as the omni.
+    private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference";
+    private const string Model = "cosyvoice-v3-flash";
+    private const int SampleRate = 24000;
+
+    public async Task<byte[]> SynthesizeAsync(string text, string voice, string? instruction, CancellationToken ct = default)
+    {
+        var apiKey = config["DASHSCOPE_API_KEY"] ?? config["Qwen:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("DASHSCOPE_API_KEY is not configured.");
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+        var token = timeoutCts.Token;
+
+        using var ws = new ClientWebSocket();
+        ws.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+        await ws.ConnectAsync(new Uri(WsUrl), token);
+
+        var taskId = Guid.NewGuid().ToString("N");
+
+        // 1) run-task — open a TTS task with the voice + audio format + (optional) instruct.
+        var parameters = new Dictionary<string, object?>
+        {
+            ["text_type"] = "PlainText",
+            ["voice"] = voice,
+            ["format"] = "pcm",
+            ["sample_rate"] = SampleRate,
+            ["volume"] = 50,
+            ["rate"] = 1.0,
+            ["pitch"] = 1.0,
+        };
+        if (!string.IsNullOrWhiteSpace(instruction))
+            parameters["instruction"] = instruction.Length > 128 ? instruction[..128] : instruction;
+
+        await SendJsonAsync(ws, new
+        {
+            header = new { action = "run-task", task_id = taskId, streaming = "duplex" },
+            payload = new
+            {
+                model = Model,
+                task_group = "audio",
+                task = "tts",
+                function = "SpeechSynthesizer",
+                input = new { },
+                parameters,
+            },
+        }, token);
+
+        // 2) continue-task — feed the text to speak.
+        await SendJsonAsync(ws, new
+        {
+            header = new { action = "continue-task", task_id = taskId, streaming = "duplex" },
+            payload = new
+            {
+                model = Model,
+                task_group = "audio",
+                task = "tts",
+                function = "SpeechSynthesizer",
+                input = new { text },
+            },
+        }, token);
+
+        // 3) finish-task — no more text.
+        await SendJsonAsync(ws, new
+        {
+            header = new { action = "finish-task", task_id = taskId, streaming = "duplex" },
+            payload = new { input = new { } },
+        }, token);
+
+        // Collect binary audio frames until task-finished (text control frames carry the events).
+        using var audio = new MemoryStream();
+        var buffer = new byte[32768];
+        var failed = false;
+        while (ws.State == WebSocketState.Open)
+        {
+            var result = await ws.ReceiveAsync(buffer, token);
+            if (result.MessageType == WebSocketMessageType.Close) break;
+
+            if (result.MessageType == WebSocketMessageType.Binary)
+            {
+                audio.Write(buffer, 0, result.Count);
+                while (!result.EndOfMessage)
+                {
+                    result = await ws.ReceiveAsync(buffer, token);
+                    audio.Write(buffer, 0, result.Count);
+                }
+                continue;
+            }
+
+            // Text control frame — reassemble + inspect the event.
+            var sb = new StringBuilder();
+            sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+            while (!result.EndOfMessage)
+            {
+                result = await ws.ReceiveAsync(buffer, token);
+                sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+            }
+            var evt = sb.ToString();
+            try
+            {
+                using var doc = JsonDocument.Parse(evt);
+                var ev = doc.RootElement.GetProperty("header").GetProperty("event").GetString();
+                if (ev == "task-finished") break;
+                if (ev == "task-failed")
+                {
+                    logger.LogError("CosyVoice task-failed: {Payload}", evt);
+                    failed = true;
+                    break;
+                }
+            }
+            catch (JsonException) { /* ignore non-JSON control frame */ }
+        }
+
+        try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None); } catch { /* best effort */ }
+
+        if (failed || audio.Length == 0)
+        {
+            logger.LogError("CosyVoice returned no audio for voice {Voice} (failed={Failed})", voice, failed);
+            throw new InvalidOperationException("Voice synthesis failed.");
+        }
+
+        return WrapPcm16MonoAsWav(audio.ToArray(), SampleRate);
+    }
+
+    private static async Task SendJsonAsync(ClientWebSocket ws, object message, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(message);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        await ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
+    }
+
+    // Prepend a 44-byte WAV header for signed 16-bit little-endian mono PCM at the given rate.
+    private static byte[] WrapPcm16MonoAsWav(byte[] pcm, int sampleRate)
+    {
+        const int channels = 1, bits = 16;
+        int byteRate = sampleRate * channels * bits / 8;
+        short blockAlign = (short)(channels * bits / 8);
+        using var ms = new MemoryStream(44 + pcm.Length);
+        using var w = new BinaryWriter(ms);
+        w.Write("RIFF"u8.ToArray());
+        w.Write(36 + pcm.Length);
+        w.Write("WAVE"u8.ToArray());
+        w.Write("fmt "u8.ToArray());
+        w.Write(16);
+        w.Write((short)1);
+        w.Write((short)channels);
+        w.Write(sampleRate);
+        w.Write(byteRate);
+        w.Write(blockAlign);
+        w.Write((short)bits);
+        w.Write("data"u8.ToArray());
+        w.Write(pcm.Length);
+        w.Write(pcm);
+        w.Flush();
+        return ms.ToArray();
+    }
+}

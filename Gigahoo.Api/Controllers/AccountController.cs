@@ -468,8 +468,7 @@ public class AccountController(
             // Validate against the active voices the LLM provider (Qwen) actually offers,
             // so the allowed set stays data-driven and survives an LLM-provider swap.
             var isValidVoice = await db.Voices.AnyAsync(v =>
-                v.IsActive && v.ApiName == agentVoice &&
-                v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1);
+                v.IsActive && v.ApiName == agentVoice && v.Provider.ProviderTypeId == 1);
             if (!isValidVoice)
                 return BadRequest(new { error = "Unknown voice selection." });
         }
