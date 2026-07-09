@@ -21,14 +21,18 @@ public class VoiceController(
     private static readonly HashSet<string> CosyInstructVoices =
         new(StringComparer.OrdinalIgnoreCase) { "longanyang", "longanhuan", "longanhuan_v3", "longhuhu_v3" };
 
-    private static string StyleInstruction(string? style) => style switch
+    // CosyVoice instruct requires a FIXED Chinese template + a supported emotion value
+    // (neutral|happy|sad|angry|fearful|surprised|disgusted). Free-text English is rejected
+    // (err 428). The style keys map onto the usable positive/neutral emotions.
+    private static string StyleInstruction(string? style)
     {
-        "warm" => "Speak in a warm, caring tone.",
-        "friendly" => "Speak in a friendly, approachable tone.",
-        "energetic" => "Speak in an upbeat, energetic tone.",
-        "calm" => "Speak in a calm, reassuring tone.",
-        _ => "Speak in a polished, professional tone.",
-    };
+        var emotion = style switch
+        {
+            "warm" or "friendly" or "energetic" => "happy",
+            _ => "neutral", // professional, calm
+        };
+        return $"你说话的情感是{emotion}。";
+    }
 
     /// <summary>
     /// Synthesize the given greeting text in the given voice and return WAV audio,
