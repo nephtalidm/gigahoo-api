@@ -82,8 +82,11 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
             },
         }, token);
 
-        // 2) continue-task — feed the text to speak.
-        await SendJsonAsync(ws, new
+        // The task protocol is ORDERED: we must wait for `task-started` before sending the text.
+        // Sending continue-task/finish-task up front races task setup — the text is sometimes
+        // dropped and the task never finishes (intermittent 30s hang). So prepare them and send
+        // only once task-started arrives.
+        var continueMsg = new
         {
             header = new { action = "continue-task", task_id = taskId, streaming = "duplex" },
             payload = new
@@ -94,19 +97,18 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
                 function = "SpeechSynthesizer",
                 input = new { text },
             },
-        }, token);
-
-        // 3) finish-task — no more text.
-        await SendJsonAsync(ws, new
+        };
+        var finishMsg = new
         {
             header = new { action = "finish-task", task_id = taskId, streaming = "duplex" },
             payload = new { input = new { } },
-        }, token);
+        };
 
         // Collect binary audio frames until task-finished (text control frames carry the events).
         using var audio = new MemoryStream();
         var buffer = new byte[32768];
         var failed = false;
+        var started = false;
         while (ws.State == WebSocketState.Open)
         {
             var result = await ws.ReceiveAsync(buffer, token);
@@ -132,19 +134,31 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
                 sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
             }
             var evt = sb.ToString();
+            string? ev = null;
             try
             {
                 using var doc = JsonDocument.Parse(evt);
-                var ev = doc.RootElement.GetProperty("header").GetProperty("event").GetString();
-                if (ev == "task-finished") break;
-                if (ev == "task-failed")
-                {
-                    logger.LogError("CosyVoice task-failed: {Payload}", evt);
-                    failed = true;
-                    break;
-                }
+                if (doc.RootElement.TryGetProperty("header", out var h) && h.TryGetProperty("event", out var e))
+                    ev = e.GetString();
             }
             catch (JsonException) { /* ignore non-JSON control frame */ }
+
+            if (ev == "task-started" && !started)
+            {
+                started = true;
+                await SendJsonAsync(ws, continueMsg, token);
+                await SendJsonAsync(ws, finishMsg, token);
+            }
+            else if (ev == "task-finished")
+            {
+                break;
+            }
+            else if (ev == "task-failed")
+            {
+                logger.LogError("CosyVoice task-failed: {Payload}", evt);
+                failed = true;
+                break;
+            }
         }
 
         try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None); } catch { /* best effort */ }
