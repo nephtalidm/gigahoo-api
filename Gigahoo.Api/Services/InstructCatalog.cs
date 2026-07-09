@@ -20,6 +20,11 @@ public static class InstructCatalog
     {
         ["longanyang"] = new()
         {
+            new("role:一个暴怒到极点的Karen", "😡 Super mega angry Karen"),
+            new("role:激情四射、声嘶力竭的拍卖师", "🔥 Screaming hype auctioneer"),
+            new("role:阴森恐怖的鬼故事讲述者", "👻 Creepy horror narrator"),
+            new("role:痛哭流涕、悲痛欲绝的人", "😭 Sobbing drama queen"),
+            new("role:趾高气扬的大反派", "😈 Over-the-top villain"),
             new("scenario:闲聊互动", "Casual conversation"),
             new("scenario:新闻播报", "News broadcast"),
             new("scenario:广告促销", "Ad promotion"),
@@ -43,6 +48,10 @@ public static class InstructCatalog
         },
         ["longhuhu_v3"] = new()
         {
+            new("role:一个暴怒到极点的Karen", "😡 Super mega angry Karen"),
+            new("role:超级兴奋、蹦蹦跳跳的小朋友", "🤩 Hyper excited kid"),
+            new("role:阴森恐怖的小幽灵", "👻 Spooky little ghost"),
+            new("role:委屈巴巴、放声大哭的小孩", "😭 Wailing tantrum kid"),
             new("scenario:自由对话", "Free conversation"),
             new("scenario:广告促销", "Ad promotion"),
             new("role:温和客服", "Gentle customer service"),
