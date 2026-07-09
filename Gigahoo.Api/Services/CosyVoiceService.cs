@@ -21,9 +21,24 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
     // Managed DashScope task-based inference WS (Singapore/international), same host as the omni.
     private const string WsUrl = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference";
     private const string Model = "cosyvoice-v3-flash";
-    private const int SampleRate = 24000;
+    private const int SampleRate = 22050; // CosyVoice's documented default; 24000 is rejected (err 428).
 
     public async Task<byte[]> SynthesizeAsync(string text, string voice, string? instruction, CancellationToken ct = default)
+    {
+        try
+        {
+            return await SynthesizeOnceAsync(text, voice, instruction, ct);
+        }
+        catch (InvalidOperationException) when (!string.IsNullOrWhiteSpace(instruction))
+        {
+            // The style/emotion instruct may be rejected (unsupported format/voice). Retry plain so
+            // the voice still previews; the instruct format gets refined separately.
+            logger.LogWarning("CosyVoice failed with instruction; retrying without it for voice {Voice}", voice);
+            return await SynthesizeOnceAsync(text, voice, null, ct);
+        }
+    }
+
+    private async Task<byte[]> SynthesizeOnceAsync(string text, string voice, string? instruction, CancellationToken ct)
     {
         var apiKey = config["DASHSCOPE_API_KEY"] ?? config["Qwen:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
