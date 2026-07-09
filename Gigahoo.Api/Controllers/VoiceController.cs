@@ -40,7 +40,7 @@ public class VoiceController(
 
         try
         {
-            var wav = await voiceSamples.SynthesizeAsync(text, voice!, HttpContext.RequestAborted);
+            var wav = await voiceSamples.SynthesizeAsync(text, voice!, request.Style, HttpContext.RequestAborted);
             return File(wav, "audio/wav");
         }
         catch (InvalidOperationException ex)
@@ -56,4 +56,4 @@ public class VoiceController(
     }
 }
 
-public record VoiceSampleRequest(string? Text, string? Voice);
+public record VoiceSampleRequest(string? Text, string? Voice, string? Style);

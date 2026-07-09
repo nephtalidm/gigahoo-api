@@ -15,7 +15,7 @@ public interface IVoiceSampleService
     /// Synthesize <paramref name="text"/> spoken in <paramref name="voice"/> and return WAV
     /// bytes. Throws on configuration/transport errors.
     /// </summary>
-    Task<byte[]> SynthesizeAsync(string text, string voice, CancellationToken ct = default);
+    Task<byte[]> SynthesizeAsync(string text, string voice, string? style = null, CancellationToken ct = default);
 }
 
 public class VoiceSampleService(
@@ -28,8 +28,19 @@ public class VoiceSampleService(
     private const string GenerationUrl =
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-    public async Task<byte[]> SynthesizeAsync(string text, string voice, CancellationToken ct = default)
+    public async Task<byte[]> SynthesizeAsync(string text, string voice, string? style = null, CancellationToken ct = default)
     {
+        // Map the account's voice-style key to a spoken-tone phrase (mirrors the agent prompt),
+        // so the preview reflects the selected personality.
+        var tone = style switch
+        {
+            "warm" => "warm and caring",
+            "friendly" => "friendly and approachable",
+            "energetic" => "upbeat and energetic",
+            "calm" => "calm and reassuring",
+            _ => "polished and professional",
+        };
+
         // The key is provided as an env var on the server; accept the appsettings fallback too.
         var apiKey = config["DASHSCOPE_API_KEY"] ?? config["Qwen:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -51,7 +62,7 @@ public class VoiceSampleService(
             stream = true,
             messages = new object[]
             {
-                new { role = "system", content = "You are a text-to-speech engine. Read the user's message aloud VERBATIM, in the SAME language as the message, in a warm, friendly tone. Do not add, omit, translate, or change any words, and do not respond conversationally." },
+                new { role = "system", content = $"You are a text-to-speech engine. Read the user's message aloud VERBATIM, in the SAME language as the message, in a {tone} tone. Do not add, omit, translate, or change any words, and do not respond conversationally." },
                 new { role = "user", content = text },
             },
         });
