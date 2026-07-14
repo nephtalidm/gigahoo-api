@@ -408,15 +408,17 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
-    // Format a NANP number as "(XXX) XXX-XXXX"; non-NANP inputs are returned unchanged.
+    // Format a NANP number WITH its country code, "+1 (XXX) XXX-XXXX" — the email (unlike the
+    // spoken call) always shows the full international number. Bare 10-digit numbers are assumed
+    // NANP; other shapes are returned unchanged.
     private static string FormatPhone(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "Unknown";
         var sb = new System.Text.StringBuilder();
         foreach (var c in raw) if (char.IsDigit(c)) sb.Append(c);
         var digits = sb.ToString();
-        if (digits.Length == 11 && digits[0] == '1') digits = digits[1..];
-        if (digits.Length == 10) return $"({digits[..3]}) {digits[3..6]}-{digits[6..]}";
+        if (digits.Length == 11 && digits[0] == '1') return $"+1 ({digits[1..4]}) {digits[4..7]}-{digits[7..]}";
+        if (digits.Length == 10) return $"+1 ({digits[..3]}) {digits[3..6]}-{digits[6..]}";
         return raw;
     }
 
