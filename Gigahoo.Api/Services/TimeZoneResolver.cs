@@ -115,7 +115,45 @@ public static class TimeZoneResolver
     public static string? ResolveIana(string? region)
         => region is not null && RegionToIana.TryGetValue(region, out var iana) ? iana : null;
 
-    /// <summary>Format a UTC time in the account region's local timezone, e.g. "Jul 8, 2026, 11:53 AM (UTC-07:00)".</summary>
+    // Common abbreviation for each zone the resolver can emit: (standard, daylight). Zones without
+    // DST repeat the standard name. .NET has no tz abbreviations of its own, and readers know
+    // "PDT" far better than "UTC-07:00". Mexican zones are post-2022 (DST abolished; border zones
+    // on America/Matamoros and America/Tijuana still follow US DST).
+    private static readonly Dictionary<string, (string Std, string Dst)> IanaToAbbr = new()
+    {
+        ["America/Anchorage"] = ("AKST", "AKDT"),
+        ["America/Boise"] = ("MST", "MDT"),
+        ["America/Cancun"] = ("EST", "EST"),
+        ["America/Chicago"] = ("CST", "CDT"),
+        ["America/Chihuahua"] = ("CST", "CST"),
+        ["America/Denver"] = ("MST", "MDT"),
+        ["America/Detroit"] = ("EST", "EDT"),
+        ["America/Edmonton"] = ("MST", "MDT"),
+        ["America/Halifax"] = ("AST", "ADT"),
+        ["America/Hermosillo"] = ("MST", "MST"),
+        ["America/Indiana/Indianapolis"] = ("EST", "EDT"),
+        ["America/Iqaluit"] = ("EST", "EDT"),
+        ["America/Los_Angeles"] = ("PST", "PDT"),
+        ["America/Matamoros"] = ("CST", "CDT"),
+        ["America/Mazatlan"] = ("MST", "MST"),
+        ["America/Merida"] = ("CST", "CST"),
+        ["America/Mexico_City"] = ("CST", "CST"),
+        ["America/Moncton"] = ("AST", "ADT"),
+        ["America/Monterrey"] = ("CST", "CST"),
+        ["America/New_York"] = ("EST", "EDT"),
+        ["America/Phoenix"] = ("MST", "MST"),
+        ["America/Regina"] = ("CST", "CST"),
+        ["America/St_Johns"] = ("NST", "NDT"),
+        ["America/Tijuana"] = ("PST", "PDT"),
+        ["America/Toronto"] = ("EST", "EDT"),
+        ["America/Vancouver"] = ("PST", "PDT"),
+        ["America/Whitehorse"] = ("MST", "MST"),
+        ["America/Winnipeg"] = ("CST", "CDT"),
+        ["America/Yellowknife"] = ("MST", "MDT"),
+        ["Pacific/Honolulu"] = ("HST", "HST"),
+    };
+
+    /// <summary>Format a UTC time in the account region's local timezone, e.g. "Jul 13, 2026 9:10 AM (PDT)".</summary>
     public static string FormatLocal(DateTime utc, string? region)
     {
         var utcTime = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
@@ -125,15 +163,28 @@ public static class TimeZoneResolver
             {
                 var info = TimeZoneInfo.FindSystemTimeZoneById(iana);
                 var local = TimeZoneInfo.ConvertTimeFromUtc(utcTime, info);
-                var off = info.GetUtcOffset(local);
-                var offStr = $"UTC{(off < TimeSpan.Zero ? "-" : "+")}{Math.Abs(off.Hours):D2}:{Math.Abs(off.Minutes):D2}";
-                return $"{local:MMM d, yyyy, h:mm tt} ({offStr})";
+                string zone;
+                if (IanaToAbbr.TryGetValue(iana, out var abbr))
+                {
+                    zone = info.IsDaylightSavingTime(local) ? abbr.Dst : abbr.Std;
+                }
+                else
+                {
+                    var off = info.GetUtcOffset(local);
+                    zone = $"UTC{(off < TimeSpan.Zero ? "-" : "+")}{Math.Abs(off.Hours):D2}:{Math.Abs(off.Minutes):D2}";
+                }
+                return $"{Stamp(local)} ({zone})";
             }
             catch
             {
                 // timezone db not found on host — fall through to UTC
             }
         }
-        return $"{utcTime:MMM d, yyyy, h:mm tt} (UTC)";
+        return $"{Stamp(utcTime)} (UTC)";
     }
+
+    // "Jul 13, 2026 9:10 AM" — invariant culture so month names / AM-PM never localize to the
+    // server's locale (emails are English regardless of the host).
+    private static string Stamp(DateTime t)
+        => t.ToString("MMM d, yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
 }
