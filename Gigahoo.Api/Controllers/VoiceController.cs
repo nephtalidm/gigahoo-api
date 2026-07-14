@@ -15,6 +15,7 @@ public class VoiceController(
     GigahooDbContext db,
     IVoiceSampleService voiceSamples,
     ICosyVoiceService cosyVoice,
+    IQwenTtsService qwenTts,
     ILogger<VoiceController> logger) : ControllerBase
 {
     /// <summary>
@@ -41,6 +42,14 @@ public class VoiceController(
 
         try
         {
+            if (voiceRow.Provider.Code == "qwen-tts")
+            {
+                // Qwen3-TTS-Instruct: a creative preset (or plain emotion) → free-English directive.
+                var instruction = QwenInstructs.Build(request.Instruct, request.Style);
+                var (bytes, contentType) = await qwenTts.SynthesizeAsync(text, voice!, instruction, HttpContext.RequestAborted);
+                return File(bytes, contentType);
+            }
+
             byte[] wav;
             if (voiceRow.Provider.Code == "cosyvoice")
             {

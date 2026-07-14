@@ -66,6 +66,7 @@ try
     builder.Services.AddScoped<IStripeService, StripeService>();
     builder.Services.AddScoped<IVoiceSampleService, VoiceSampleService>();
     builder.Services.AddScoped<ICosyVoiceService, CosyVoiceService>();
+    builder.Services.AddScoped<IQwenTtsService, QwenTtsService>();
 
     // Payment providers: register EVERY implementation so they're all active at
     // once. The registry exposes them by Name and picks Default for new payments

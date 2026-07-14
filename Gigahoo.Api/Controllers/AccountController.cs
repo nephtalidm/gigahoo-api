@@ -484,9 +484,12 @@ public class AccountController(
         if (agentStyle is not null && !allowedStyles.Contains(agentStyle))
             return BadRequest(new { error = "Unknown voice style." });
 
-        // Optional instruct "context" (scenario/role/identity) — must be valid for the selected voice.
+        // Optional "speaking context" preset — accept a Qwen-TTS creative preset or (legacy) a
+        // valid CosyVoice context for the selected voice; anything else is dropped.
         var agentInstruct = string.IsNullOrWhiteSpace(request.AgentInstruct) ? null : request.AgentInstruct.Trim();
-        if (agentInstruct is not null && (agentVoice is null || !Gigahoo.Api.Services.InstructCatalog.IsValidContext(agentVoice, agentInstruct)))
+        if (agentInstruct is not null &&
+            !Gigahoo.Api.Services.QwenInstructs.IsValid(agentInstruct) &&
+            !(agentVoice is not null && Gigahoo.Api.Services.InstructCatalog.IsValidContext(agentVoice, agentInstruct)))
             agentInstruct = null;
 
         account.GreetingMessage = greeting;

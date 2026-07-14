@@ -102,7 +102,8 @@ public class VoiceAgentController(
             account.CollectAddress,
             account.CollectEmergency,
             account.AgentStyle,
-            account.AgentInstruct
+            account.AgentInstruct,
+            account.AccountLanguage
         ));
     }
 
@@ -248,7 +249,8 @@ public record VoiceAgentAccountResponse(
     bool CollectAddress,
     bool CollectEmergency,
     string? AgentStyle,
-    string? AgentInstruct
+    string? AgentInstruct,
+    string? AccountLanguage
 );
 
 public record VoiceAgentFeatureSettings(

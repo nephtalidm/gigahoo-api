@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -57,9 +58,11 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
         var token = timeoutCts.Token;
 
+        var sw = Stopwatch.StartNew();
         using var ws = new ClientWebSocket();
         ws.Options.SetRequestHeader("Authorization", $"Bearer {apiKey}");
         await ws.ConnectAsync(new Uri(WsUrl), token);
+        var connectMs = sw.ElapsedMilliseconds;
 
         var taskId = Guid.NewGuid().ToString("N");
 
@@ -122,6 +125,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
         var buffer = new byte[32768];
         var failed = false;
         var started = false;
+        long commitMs = -1, firstAudioAt = -1;
         while (ws.State == WebSocketState.Open)
         {
             var result = await ws.ReceiveAsync(buffer, token);
@@ -129,6 +133,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
 
             if (result.MessageType == WebSocketMessageType.Binary)
             {
+                if (firstAudioAt < 0) firstAudioAt = sw.ElapsedMilliseconds;
                 audio.Write(buffer, 0, result.Count);
                 while (!result.EndOfMessage)
                 {
@@ -161,6 +166,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
                 started = true;
                 await SendJsonAsync(ws, continueMsg, token);
                 await SendJsonAsync(ws, finishMsg, token);
+                commitMs = sw.ElapsedMilliseconds; // text request fully sent
             }
             else if (ev == "task-finished")
             {
@@ -174,6 +180,7 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
             }
         }
 
+        sw.Stop();
         try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None); } catch { /* best effort */ }
 
         if (failed || audio.Length == 0)
@@ -181,6 +188,10 @@ public class CosyVoiceService(IConfiguration config, ILogger<CosyVoiceService> l
             logger.LogError("CosyVoice returned no audio for voice {Voice} (failed={Failed})", voice, failed);
             throw new InvalidOperationException("Voice synthesis failed.");
         }
+
+        var ttfaMs = firstAudioAt < 0 || commitMs < 0 ? -1 : firstAudioAt - commitMs;
+        logger.LogInformation("TIMING CosyVoice voice={Voice}: connect={Connect}ms ttfa={Ttfa}ms total={Total}ms bytes={Bytes}",
+            voice, connectMs, ttfaMs, sw.ElapsedMilliseconds, audio.Length);
 
         return WrapPcm16MonoAsWav(audio.ToArray(), SampleRate);
     }
