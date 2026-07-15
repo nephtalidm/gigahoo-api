@@ -209,7 +209,10 @@ public class VoiceAgentController(
                 try
                 {
                     var mmss = $"{request.DurationSeconds / 60}:{request.DurationSeconds % 60:D2}";
-                    var text = $"New Gigahoo call — {request.CallerName ?? "Unknown"} ({request.CallerPhoneNumber}), {mmss} min.\n{request.Summary}";
+                    // The address is the RECORD's address — Google's canonical format (or the
+                    // caller's insisted version), same as the dashboard and the email.
+                    var addressLine = string.IsNullOrWhiteSpace(request.Address) ? "" : $"\n{request.Address}";
+                    var text = $"New Gigahoo call — {request.CallerName ?? "Unknown"} ({request.CallerPhoneNumber}), {mmss} min.{addressLine}\n{request.Summary}";
                     await smsProvider.SendAsync(ownerPhone, text);
                 }
                 catch (Exception ex)
