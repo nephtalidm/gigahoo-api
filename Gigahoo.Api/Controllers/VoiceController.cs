@@ -16,6 +16,7 @@ public class VoiceController(
     IVoiceSampleService voiceSamples,
     ICosyVoiceService cosyVoice,
     IQwenTtsService qwenTts,
+    IFishTtsService fishTts,
     ILogger<VoiceController> logger) : ControllerBase
 {
     /// <summary>
@@ -42,6 +43,14 @@ public class VoiceController(
 
         try
         {
+            if (voiceRow.Provider.Code == "fish")
+            {
+                // Fish Audio speaks the live calls — the sample is rendered by the same engine
+                // with the same voice id, so the preview is exactly what callers hear.
+                var mp3 = await fishTts.SynthesizeAsync(text, voice!, HttpContext.RequestAborted);
+                return File(mp3, "audio/mpeg");
+            }
+
             if (voiceRow.Provider.Code == "qwen-tts")
             {
                 // Qwen3-TTS-Instruct: a creative preset (or plain emotion) → free-English directive.

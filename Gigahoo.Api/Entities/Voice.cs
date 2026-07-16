@@ -10,6 +10,9 @@ public class Voice
     public Provider Provider { get; set; } = null!;
     public string ApiName { get; set; } = null!;  // provider voice id passed to the TTS engine
     public string Label { get; set; } = null!;     // human-friendly label shown in the picker
+    public string? Gender { get; set; }            // "male" | "female" — picker grouping
+    public byte? LanguageId { get; set; }          // FK -> Language: the language this voice speaks
+    public Language? Language { get; set; }
     public int DisplayOrder { get; set; }
     public bool IsDefault { get; set; }
     public bool IsActive { get; set; }

@@ -14,22 +14,30 @@ namespace Gigahoo.Api.Controllers;
 public class VoicesController(GigahooDbContext db) : ControllerBase
 {
     /// <summary>
-    /// The active AI-agent voices for the LLM provider (Qwen), for the dashboard
-    /// voice picker. Ordered by DisplayOrder. Not sensitive, so anonymous-readable.
+    /// The active AI-agent voices (Fish Audio — the engine that speaks live calls) for the
+    /// dashboard voice picker: tagged with gender and language, ordered by language then
+    /// DisplayOrder. Not sensitive, so anonymous-readable.
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<List<VoiceResponse>>> Get()
     {
         var rows = await db.Voices
-            .Where(v => v.IsActive && v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1)
-            .OrderBy(v => v.DisplayOrder)
-            .Select(v => new { v.ApiName, v.Label, v.IsDefault })
+            .Where(v => v.IsActive && v.Provider.Code == "fish" && v.Provider.ProviderTypeId == 1)
+            .OrderBy(v => v.LanguageId).ThenBy(v => v.DisplayOrder)
+            .Select(v => new
+            {
+                v.ApiName,
+                v.Label,
+                v.IsDefault,
+                v.Gender,
+                Language = v.Language != null ? v.Language.Name : null,
+            })
             .ToListAsync();
 
-        // These are the omni voices that actually drive live calls. Emotion is handled adaptively in
-        // the agent's system prompt (not per-voice TTS instructs), so no options are attached.
+        // Emotion is handled adaptively by the agent (voice tags in the reply text), so no
+        // per-voice instruct options are attached.
         var voices = rows
-            .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault, Array.Empty<InstructOption>()))
+            .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault, v.Gender, v.Language, Array.Empty<InstructOption>()))
             .ToList();
 
         return Ok(voices);
@@ -60,7 +68,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     }
 }
 
-public record VoiceResponse(string ApiName, string Label, bool IsDefault, IReadOnlyList<InstructOption> Options);
+public record VoiceResponse(string ApiName, string Label, bool IsDefault, string? Gender, string? Language, IReadOnlyList<InstructOption> Options);
 public record LabVoice(string ApiName, string Label);
 public record LabResponse(
     IReadOnlyList<LabVoice> Cosyvoice,

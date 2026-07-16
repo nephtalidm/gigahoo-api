@@ -95,8 +95,10 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasKey(x => x.VoiceId);
             e.Property(x => x.ApiName).HasMaxLength(64);
             e.Property(x => x.Label).HasMaxLength(128);
+            e.Property(x => x.Gender).HasMaxLength(10);
             e.HasIndex(x => new { x.ProviderId, x.ApiName }).IsUnique();
             e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
+            e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
         });
 
         // PlanPrice (one row per plan x currency x provider)
