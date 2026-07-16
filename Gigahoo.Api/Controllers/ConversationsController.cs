@@ -18,7 +18,8 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
     public async Task<ActionResult<ConversationsPageResponse>> GetConversations(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
-        [FromQuery] string? status = null)
+        [FromQuery] string? status = null,
+        [FromQuery] byte? typeId = null)
     {
         var accountId = GetAccountId();
 
@@ -28,6 +29,11 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
         var query = db.Conversations
             .Include(c => c.Language)
             .Where(c => c.AccountId == accountId);
+
+        // Channel filter (ConversationType seed: 1 = Phone Call). The dashboard's Call History
+        // passes typeId=1; future message receptionists (SMS/WhatsApp) query their own type.
+        if (typeId is not null)
+            query = query.Where(c => c.ConversationTypeId == typeId);
 
         if (!string.IsNullOrEmpty(status))
             query = query.Where(c => c.ConversationStatus!.Name == status);
