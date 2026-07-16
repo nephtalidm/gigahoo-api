@@ -246,7 +246,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         message.To.Add(MailboxAddress.Parse(toEmail));
         message.Subject = "You've used all your included Gigahoo minutes";
 
-        var upgradeUrl = $"{config["Frontend:Url"] ?? "https://gigahoo.ai"}/dashboard/billing";
+        var upgradeUrl = $"{config["Frontend:Url"] ?? "https://gigahoo.ai"}/dashboard/plan";
 
         var body = $$"""
             <!DOCTYPE html>

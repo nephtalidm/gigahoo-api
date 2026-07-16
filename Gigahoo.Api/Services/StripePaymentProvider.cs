@@ -70,13 +70,18 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
             Type = "card",
         });
 
+        // The default lives on the customer (invoice settings), not the payment method.
+        var customer = new CustomerService().Get(customerId);
+        var defaultId = customer.InvoiceSettings?.DefaultPaymentMethodId;
+
         IReadOnlyList<PaymentMethodInfo> result = methods.Data
             .Select(pm => new PaymentMethodInfo(
                 pm.Id,
                 pm.Card?.Brand ?? "",
                 pm.Card?.Last4 ?? "",
                 pm.Card?.ExpMonth ?? 0,
-                pm.Card?.ExpYear ?? 0))
+                pm.Card?.ExpYear ?? 0,
+                pm.Id == defaultId))
             .ToList();
         return Task.FromResult(result);
     }
@@ -86,6 +91,19 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
         StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
         var service = new PaymentMethodService();
         service.Detach(paymentMethodId);
+        return Task.CompletedTask;
+    }
+
+    public Task SetDefaultPaymentMethodAsync(string customerId, string paymentMethodId)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+        new CustomerService().Update(customerId, new CustomerUpdateOptions
+        {
+            InvoiceSettings = new CustomerInvoiceSettingsOptions
+            {
+                DefaultPaymentMethod = paymentMethodId,
+            },
+        });
         return Task.CompletedTask;
     }
 }

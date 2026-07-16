@@ -197,8 +197,8 @@ public class BillingController(
             }
         }
 
-        var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing?session_id={{CHECKOUT_SESSION_ID}}";
-        var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";
+        var successUrl = $"{Request.Scheme}://{Request.Host}/dashboard/plan?session_id={{CHECKOUT_SESSION_ID}}";
+        var cancelUrl = $"{Request.Scheme}://{Request.Host}/dashboard/plan";
 
         var url = await stripe.CreateCheckoutSessionAsync(customerId, priceId, successUrl, cancelUrl);
 
@@ -228,7 +228,7 @@ public class BillingController(
 
         var customerId = await payments.Default.EnsureCustomerAsync(account);
 
-        var returnUrl = $"{Request.Scheme}://{Request.Host}/dashboard/billing";
+        var returnUrl = $"{Request.Scheme}://{Request.Host}/dashboard/plan";
         var url = await stripe.CreateBillingPortalSessionAsync(customerId, returnUrl);
 
         return Ok(new { url });
@@ -280,6 +280,7 @@ public class BillingController(
                 expMonth = m.ExpMonth,
                 expYear = m.ExpYear,
                 provider = paymentProvider.Name,
+                isDefault = m.IsDefault,
             }));
         }
 
@@ -302,6 +303,25 @@ public class BillingController(
             return NotFound(new { error = "Payment method not found" });
 
         await paymentProvider.DetachPaymentMethodAsync(id);
+        return NoContent();
+    }
+
+    // Mark one of the account's saved payment methods as the default for future
+    // charges (provider-agnostic; ownership verified before the provider call).
+    [HttpPost("payment-methods/{id}/default")]
+    public async Task<IActionResult> SetDefaultPaymentMethod(string id, [FromQuery] string? provider)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
+
+        var paymentProvider = provider is null ? payments.Default : payments.Get(provider);
+
+        var customerId = await paymentProvider.EnsureCustomerAsync(account);
+        var methods = await paymentProvider.ListPaymentMethodsAsync(customerId);
+        if (!methods.Any(m => m.Id == id))
+            return NotFound(new { error = "Payment method not found" });
+
+        await paymentProvider.SetDefaultPaymentMethodAsync(customerId, id);
         return NoContent();
     }
 

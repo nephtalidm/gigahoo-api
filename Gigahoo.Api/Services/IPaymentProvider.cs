@@ -21,6 +21,9 @@ public interface IPaymentProvider
     Task<IReadOnlyList<PaymentMethodInfo>> ListPaymentMethodsAsync(string customerId);
 
     Task DetachPaymentMethodAsync(string paymentMethodId);
+
+    // Mark a saved payment method as the customer's default for future charges.
+    Task SetDefaultPaymentMethodAsync(string customerId, string paymentMethodId);
 }
 
-public record PaymentMethodInfo(string Id, string Brand, string Last4, long ExpMonth, long ExpYear);
+public record PaymentMethodInfo(string Id, string Brand, string Last4, long ExpMonth, long ExpYear, bool IsDefault = false);
