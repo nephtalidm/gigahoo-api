@@ -272,6 +272,14 @@ public class BillingController(
         {
             var paymentProvider = payments.Get(customer.Provider.Code);
             var methods = await paymentProvider.ListPaymentMethodsAsync(customer.CustomerId);
+            // Common practice, enforced self-healingly on read: a customer WITH cards but NO
+            // default gets the first promoted automatically — covers the just-added first card
+            // (Stripe doesn't default SetupIntent cards on its own) and a deleted default.
+            if (methods.Count > 0 && !methods.Any(m => m.IsDefault))
+            {
+                await paymentProvider.SetDefaultPaymentMethodAsync(customer.CustomerId, methods[0].Id);
+                methods = [.. methods.Select((m, i) => i == 0 ? m with { IsDefault = true } : m)];
+            }
             result.AddRange(methods.Select(m => new
             {
                 id = m.Id,
