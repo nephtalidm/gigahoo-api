@@ -185,6 +185,12 @@ public record SetPasswordRequest
     public string NewPassword { get; init; } = default!;
 }
 
+public record ConfirmAccountDeletionRequest
+{
+    [Required, MaxLength(10)]
+    public string Code { get; init; } = default!;
+}
+
 public record RequestEmailChangeRequest
 {
     [Required, EmailAddress, MaxLength(254)]

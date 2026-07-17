@@ -398,17 +398,46 @@ public class AccountController(
     }
 
     /// <summary>
-    /// DANGER ZONE: permanently delete the account and everything it owns, in dependency
-    /// order (the FKs are NO_ACTION, so children go first): release the phone number back
-    /// to the pool, cancel any live subscription (best-effort), then conversations,
-    /// invoices, payment customers, and finally the account row itself.
+    /// DANGER ZONE step 1: send a one-time confirmation code (email preferred, else SMS).
+    /// A browser confirm dialog is not authentication — deletion requires echoing this code.
     /// </summary>
-    [HttpDelete]
-    public async Task<IActionResult> Delete()
+    [HttpPost("delete/request")]
+    public async Task<IActionResult> RequestDeletion()
     {
         var accountId = GetAccountId();
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
+
+        var wait = await otp.SecondsUntilResendAsync(accountId.ToString(), "AccountDelete", TimeSpan.FromMinutes(1));
+        if (wait > 0)
+            return StatusCode(429, new { error = $"Please wait {wait} seconds before requesting another code." });
+
+        var code = await otp.GenerateAndStoreAsync(accountId.ToString(), "AccountDelete", TimeSpan.FromMinutes(10));
+        if (!string.IsNullOrWhiteSpace(account.Email))
+            await email.SendAccountDeletionCodeAsync(account.Email, code);
+        else if (!string.IsNullOrWhiteSpace(account.BusinessPhoneNumber))
+            await sms.SendAsync(account.BusinessPhoneNumber, $"Your Gigahoo account-deletion code is {code}. It expires in 10 minutes. If you didn't request this, ignore it.");
+        else
+            return BadRequest(new { error = "No email or phone number on file to send a code to." });
+
+        return Ok(new { message = "Code sent." });
+    }
+
+    /// <summary>
+    /// DANGER ZONE step 2: permanently delete the account and everything it owns, in dependency
+    /// order (the FKs are NO_ACTION, so children go first): release the phone number back
+    /// to the pool, cancel any live subscription (best-effort), then conversations,
+    /// invoices, payment customers, and finally the account row itself.
+    /// </summary>
+    [HttpPost("delete/confirm")]
+    public async Task<IActionResult> ConfirmDeletion([FromBody] ConfirmAccountDeletionRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (account is null) return NotFound();
+
+        var valid = await otp.VerifyAsync(accountId.ToString(), "AccountDelete", request.Code);
+        if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         // 1. Release the assigned number (provider-side webhook cleanup is best-effort;
         //    the pool rows are detached unconditionally so no orphaned assignment remains).

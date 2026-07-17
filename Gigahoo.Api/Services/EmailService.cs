@@ -10,6 +10,7 @@ public interface IEmailService
 {
     Task SendMagicLinkAsync(string toEmail, string magicLink, VerificationPurpose purpose = VerificationPurpose.SignIn);
     Task SendEmailChangeCodeAsync(string toEmail, string code);
+    Task SendAccountDeletionCodeAsync(string toEmail, string code);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
@@ -126,6 +127,48 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             """;
 
         message.Body = new TextPart("html") { Text = body };
+        await SendAsync(message);
+    }
+
+    public async Task SendAccountDeletionCodeAsync(string toEmail, string code)
+    {
+        var message = new MimeMessage();
+        message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
+        message.To.Add(MailboxAddress.Parse(toEmail));
+        message.Subject = "Confirm Gigahoo account deletion";
+
+        var body = $$"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background-color:#f9fafb;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:40px 0;">
+                    <tr><td align="center">
+                        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden;">
+                            <tr><td style="padding:32px 40px 0;text-align:center;">
+                                <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="180" style="height:auto;max-width:180px;" />
+                            </td></tr>
+                            <tr><td style="padding:24px 40px 32px;">
+                                <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#b91c1c;text-align:center;">Confirm account deletion</h1>
+                                <p style="margin:0 0 16px;font-size:15px;color:#374151;text-align:center;">
+                                    Someone (hopefully you) asked to permanently delete this Gigahoo account.
+                                    This removes your phone number, call history, and billing data and cannot be undone.
+                                </p>
+                                <div style="background:#f3f4f6;border-radius:8px;padding:20px;margin:0 0 16px;text-align:center;">
+                                    <p style="margin:0;font-size:32px;font-weight:700;letter-spacing:8px;color:#111827;">{{code}}</p>
+                                </div>
+                                <p style="margin:0;font-size:13px;color:#6b7280;text-align:center;">
+                                    The code expires in 10 minutes. If you didn't request this, ignore this email — nothing will be deleted.
+                                </p>
+                            </td></tr>
+                        </table>
+                    </td></tr>
+                </table>
+            </body>
+            </html>
+            """;
+
+        message.Body = new BodyBuilder { HtmlBody = body }.ToMessageBody();
         await SendAsync(message);
     }
 
