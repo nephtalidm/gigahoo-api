@@ -219,7 +219,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                     <img src="https://gigahoo.ai/gigahoo-logo.png" alt="Gigahoo" width="405" style="height: auto; max-width: 405px;" />
                 </div>
                 <h2>Welcome to Gigahoo!</h2>
-                <p>Hi {businessName},</p>
+                <p>Hi {businessName}!</p>
                 <p>Your dedicated phone number has been provisioned and is ready to receive calls:</p>
                 <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center;">
                     <p style="font-size: 24px; font-weight: bold; margin: 0; color: #111827;">{phoneNumber}</p>

@@ -72,7 +72,7 @@ public class AccountController(
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         }
 
-        account.BusinessName = request.BusinessName;
+        account.BusinessName = request.BusinessName.Trim();
         account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhoneNumber = request.BusinessPhone;
         account.Email = request.Email;
@@ -217,7 +217,7 @@ public class AccountController(
             if (emailTaken) return Conflict(new { error = "This email is already registered" });
         }
 
-        account.BusinessName = request.BusinessName;
+        account.BusinessName = request.BusinessName.Trim();
         account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhoneNumber = request.BusinessPhone;
         account.Email = request.Email;
