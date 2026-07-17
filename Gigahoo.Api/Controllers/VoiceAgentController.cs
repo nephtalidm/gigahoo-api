@@ -65,6 +65,28 @@ public class VoiceAgentController(
         var voiceRow = account.AgentVoiceId is null ? null : await db.AgentVoices
             .Include(v => v.Provider)
             .FirstOrDefaultAsync(v => v.AgentVoiceId == account.AgentVoiceId);
+        // Fish TTS voices for the split-voice pipeline: the account's pick is the PRIMARY
+        // (greeting + fallback), and each language maps to its own voice (the account's pick
+        // wins for its language; otherwise the language's IsDefault voice) so the agent can
+        // switch voices when the caller's language changes.
+        var fishVoices = await db.AgentVoices
+            .Include(v => v.Language)
+            .Where(v => v.IsActive && v.Provider!.Code == "fish" && v.Provider.ProviderTypeId == 1)
+            .OrderBy(v => v.DisplayOrder)
+            .ToListAsync();
+        var primaryFish = (voiceRow is not null && voiceRow.Provider!.Code == "fish" ? voiceRow : null)
+            ?? fishVoices.FirstOrDefault(v => v.IsDefault && v.Language?.Code == "en")
+            ?? fishVoices.FirstOrDefault(v => v.IsDefault)
+            ?? fishVoices.FirstOrDefault();
+        var ttsVoicesByLanguage = fishVoices
+            .Where(v => v.Language?.Code is not null)
+            .GroupBy(v => v.Language!.Code!)
+            .ToDictionary(
+                g => g.Key,
+                g => (primaryFish is not null && g.Any(v => v.AgentVoiceId == primaryFish.AgentVoiceId)
+                        ? g.First(v => v.AgentVoiceId == primaryFish.AgentVoiceId)
+                        : g.FirstOrDefault(v => v.IsDefault) ?? g.First()).ReferenceId);
+
         var omniVoice = voiceRow?.ReferenceId;
         if (omniVoice is not null && !(voiceRow!.IsActive && voiceRow.Provider!.Code == "qwen" && voiceRow.Provider.ProviderTypeId == 1))
             omniVoice = null;
@@ -83,6 +105,8 @@ public class VoiceAgentController(
             regionName,
             account.PostalCode,
             await db.Countries.FindAsync(account.CountryCodeId) is { } country ? country.Name : "",
+            primaryFish?.ReferenceId,
+            ttsVoicesByLanguage,
             minutesRemaining,
             canAnswer,
             greetingMessage,
@@ -231,6 +255,8 @@ public record VoiceAgentAccountResponse(
     string? Region,
     string? PostalCode,
     string Country,
+    string? TtsVoice,
+    Dictionary<string, string> TtsVoicesByLanguage,
     int MinutesRemaining,
     bool CanAnswer,
     string GreetingMessage,
