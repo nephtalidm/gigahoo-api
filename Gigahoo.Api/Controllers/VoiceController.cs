@@ -37,7 +37,7 @@ public class VoiceController(
         var voice = request.Voice?.Trim();
         var voiceRow = string.IsNullOrWhiteSpace(voice) ? null : await db.AgentVoices
             .Include(v => v.Provider)
-            .FirstOrDefaultAsync(v => v.IsActive && v.ApiName == voice && v.Provider.ProviderTypeId == 1);
+            .FirstOrDefaultAsync(v => v.IsActive && v.ReferenceId == voice && v.Provider.ProviderTypeId == 1);
         if (voiceRow is null)
             return BadRequest(new { error = "Invalid voice" });
 

@@ -456,7 +456,7 @@ public class AccountController(
             // Validate against the active voices the LLM provider (Qwen) actually offers,
             // so the allowed set stays data-driven and survives an LLM-provider swap.
             var voiceRow = await db.AgentVoices.FirstOrDefaultAsync(v =>
-                v.IsActive && v.ApiName == agentVoice && v.Provider.ProviderTypeId == 1);
+                v.IsActive && v.ReferenceId == agentVoice && v.Provider.ProviderTypeId == 1);
             if (voiceRow is null)
                 return BadRequest(new { error = "Unknown voice selection." });
             agentVoiceId = voiceRow.AgentVoiceId;
@@ -552,7 +552,7 @@ public class AccountController(
             account.GreetingMessage,
             account.AgentVoiceId is null ? null : await db.AgentVoices
                 .Where(v => v.AgentVoiceId == account.AgentVoiceId)
-                .Select(v => v.ApiName)
+                .Select(v => v.ReferenceId)
                 .FirstOrDefaultAsync(),
             account.MaximumCallMinutes,
             account.AccountLanguageId is null ? "" : await db.Languages

@@ -32,13 +32,13 @@ public class DashboardController(GigahooDbContext db) : ControllerBase
         var recentConversations = await db.Conversations
             .Include(c => c.Language)
             .Where(c => c.AccountId == accountId)
-            .OrderByDescending(c => c.DateTimeUtc)
+            .OrderByDescending(c => c.CreatedDate)
             .Take(4)
             .Select(c => new ConversationResponse(
                 c.ConversationId,
                 c.CallerName,
                 c.CallerPhoneNumber,
-                c.DateTimeUtc,
+                c.CreatedDate,
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,

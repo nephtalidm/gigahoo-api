@@ -22,7 +22,6 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<AgentVoice> AgentVoices => Set<AgentVoice>();
     public DbSet<Domain> Domains => Set<Domain>();
-    public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<PhoneNumberStatus> PhoneNumberStatuses => Set<PhoneNumberStatus>();
     public DbSet<ConversationStatus> ConversationStatuses => Set<ConversationStatus>();
     public DbSet<ConversationType> ConversationTypes => Set<ConversationType>();
@@ -93,10 +92,10 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         {
             e.ToTable("AgentVoice");
             e.HasKey(x => x.AgentVoiceId);
-            e.Property(x => x.ApiName).HasMaxLength(64);
+            e.Property(x => x.ReferenceId).HasMaxLength(64);
             e.Property(x => x.Label).HasMaxLength(128);
             e.Property(x => x.Gender).HasMaxLength(10);
-            e.HasIndex(x => new { x.ProviderId, x.ApiName }).IsUnique();
+            e.HasIndex(x => new { x.ProviderId, x.ReferenceId }).IsUnique();
             e.HasOne(x => x.Provider).WithMany().HasForeignKey(x => x.ProviderId);
             e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
         });
@@ -147,14 +146,6 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(x => x.CountryCode).HasMaxLength(2);
         });
 
-        // Setting (general website key/value settings)
-        modelBuilder.Entity<Setting>(e =>
-        {
-            e.ToTable("Setting");
-            e.HasKey(x => x.SettingKey);
-            e.Property(x => x.SettingKey).HasMaxLength(100);
-        });
-
         // Language
         modelBuilder.Entity<Language>(e =>
         {
@@ -200,7 +191,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasKey(x => x.ConversationId);
             e.HasOne(x => x.Account).WithMany(x => x.Conversations).HasForeignKey(x => x.AccountId);
             e.HasOne(x => x.Language).WithMany().HasForeignKey(x => x.LanguageId);
-            e.HasIndex(x => new { x.AccountId, x.DateTimeUtc }).IsDescending(false, true);
+            e.HasIndex(x => new { x.AccountId, x.CreatedDate }).IsDescending(false, true);
             e.HasIndex(x => new { x.AccountId, x.ConversationStatusId });
             e.HasOne(x => x.ConversationStatus).WithMany(s => s.Conversations).HasForeignKey(x => x.ConversationStatusId);
             e.HasOne(x => x.ConversationType).WithMany(t => t.Conversations).HasForeignKey(x => x.ConversationTypeId);

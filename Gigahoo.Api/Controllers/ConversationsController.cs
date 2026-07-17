@@ -41,14 +41,14 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
         var totalCount = await query.CountAsync();
 
         var conversations = await query
-            .OrderByDescending(c => c.DateTimeUtc)
+            .OrderByDescending(c => c.CreatedDate)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(c => new ConversationResponse(
                 c.ConversationId,
                 c.CallerName,
                 c.CallerPhoneNumber,
-                c.DateTimeUtc,
+                c.CreatedDate,
                 c.DurationSeconds,
                 c.Language != null ? c.Language.Name : "English",
                 c.Summary,
@@ -77,7 +77,7 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             conversation.ConversationId,
             conversation.CallerName,
             conversation.CallerPhoneNumber,
-            conversation.DateTimeUtc,
+            conversation.CreatedDate,
             conversation.DurationSeconds,
             conversation.Language?.Name ?? "English",
             conversation.Summary,

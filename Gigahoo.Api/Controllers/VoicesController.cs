@@ -26,7 +26,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
             .OrderBy(v => v.LanguageId).ThenBy(v => v.DisplayOrder)
             .Select(v => new
             {
-                v.ApiName,
+                v.ReferenceId,
                 v.Label,
                 v.IsDefault,
                 v.Gender,
@@ -37,7 +37,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
         // Emotion is handled adaptively by the agent (voice tags in the reply text), so no
         // per-voice instruct options are attached.
         var voices = rows
-            .Select(v => new VoiceResponse(v.ApiName, v.Label, v.IsDefault, v.Gender, v.Language, Array.Empty<InstructOption>()))
+            .Select(v => new VoiceResponse(v.ReferenceId, v.Label, v.IsDefault, v.Gender, v.Language, Array.Empty<InstructOption>()))
             .ToList();
 
         return Ok(voices);
@@ -54,12 +54,12 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
         var cosy = await db.AgentVoices
             .Where(v => v.IsActive && v.Provider.Code == "cosyvoice" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
-            .Select(v => new LabVoice(v.ApiName, v.Label))
+            .Select(v => new LabVoice(v.ReferenceId, v.Label))
             .ToListAsync();
         var qwen = await db.AgentVoices
             .Where(v => v.IsActive && v.Provider.Code == "qwen-tts" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
-            .Select(v => new LabVoice(v.ApiName, v.Label))
+            .Select(v => new LabVoice(v.ReferenceId, v.Label))
             .ToListAsync();
 
         // CosyVoice emotions, working ones first (sad/fearful render best; high-arousal barely at all).

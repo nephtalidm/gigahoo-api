@@ -25,7 +25,7 @@ public class PhoneNumberCleanupService(
         var inactiveAccounts = await db.Accounts
             .Include(a => a.Conversations)
             .Where(a => a.AssignedPhoneNumberId != null)
-            .Where(a => a.Conversations.All(c => c.DateTimeUtc < cutoffDate) || !a.Conversations.Any())
+            .Where(a => a.Conversations.All(c => c.CreatedDate < cutoffDate) || !a.Conversations.Any())
             .ToListAsync();
 
         logger.LogInformation("Found {Count} inactive accounts with phone numbers", inactiveAccounts.Count);
@@ -46,7 +46,7 @@ public class PhoneNumberCleanupService(
                 logger.LogInformation(
                     "Released phone number from inactive account {AccountId} (last activity: {LastActivity})",
                     account.AccountId,
-                    account.Conversations.Max(c => (DateTime?)c.DateTimeUtc) ?? account.CreatedAt);
+                    account.Conversations.Max(c => (DateTime?)c.CreatedDate) ?? account.CreatedAt);
             }
             catch (Exception ex)
             {

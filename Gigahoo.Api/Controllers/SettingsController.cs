@@ -7,7 +7,7 @@ namespace Gigahoo.Api.Controllers;
 [ApiController]
 [Route("api/settings")]
 [EnableRateLimiting("api")]
-public class SettingsController(GigahooDbContext db) : ControllerBase
+public class SettingsController(IConfiguration config) : ControllerBase
 {
     // Public website settings consumed by the dashboard UI. Non-sensitive
     // key/value pairs (e.g. the default AI voice agent greeting used to
@@ -15,10 +15,7 @@ public class SettingsController(GigahooDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult> Get()
     {
-        var defaultGreeting = await db.Settings
-            .Where(s => s.SettingKey == "DefaultGreeting")
-            .Select(s => s.SettingValue)
-            .FirstOrDefaultAsync();
+        var defaultGreeting = config["Defaults:DefaultGreeting"];
         return Ok(new { defaultGreeting });
     }
 }

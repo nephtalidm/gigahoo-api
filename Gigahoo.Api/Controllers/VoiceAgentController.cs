@@ -15,6 +15,7 @@ namespace Gigahoo.Api.Controllers;
 [Route("api/voice-agent")]
 public class VoiceAgentController(
     GigahooDbContext db,
+    IConfiguration config,
     ISmsProvider smsProvider,
     IEmailService email,
     ILogger<VoiceAgentController> logger) : ControllerBase
@@ -41,10 +42,7 @@ public class VoiceAgentController(
         var greetingMessage = account.GreetingMessage;
         if (string.IsNullOrWhiteSpace(greetingMessage))
         {
-            greetingMessage = await db.Settings
-                .Where(s => s.SettingKey == "DefaultGreeting")
-                .Select(s => s.SettingValue)
-                .FirstOrDefaultAsync();
+            greetingMessage = config["Defaults:DefaultGreeting"];
         }
         if (string.IsNullOrWhiteSpace(greetingMessage))
         {
@@ -67,7 +65,7 @@ public class VoiceAgentController(
         var voiceRow = account.AgentVoiceId is null ? null : await db.AgentVoices
             .Include(v => v.Provider)
             .FirstOrDefaultAsync(v => v.AgentVoiceId == account.AgentVoiceId);
-        var omniVoice = voiceRow?.ApiName;
+        var omniVoice = voiceRow?.ReferenceId;
         if (omniVoice is not null && !(voiceRow!.IsActive && voiceRow.Provider!.Code == "qwen" && voiceRow.Provider.ProviderTypeId == 1))
             omniVoice = null;
 
@@ -118,7 +116,6 @@ public class VoiceAgentController(
             AccountId = accountId,
             CallerName = request.CallerName,
             CallerPhoneNumber = request.CallerPhoneNumber,
-            DateTimeUtc = DateTime.UtcNow,
             DurationSeconds = request.DurationSeconds,
             LanguageId = request.LanguageId ?? 1, // Default to English
             Summary = request.Summary,
@@ -127,7 +124,7 @@ public class VoiceAgentController(
             ConversationStatusId = (byte)(Enum.TryParse<Entities.ConversationStatusId>(request.Status, ignoreCase: true, out var cs)
                 ? cs : Entities.ConversationStatusId.Missed),
             ConversationTypeId = (byte)Entities.ConversationTypeId.PhoneCall,
-            CreatedAt = DateTime.UtcNow,
+            CreatedDate = DateTime.UtcNow,
         };
 
         db.Conversations.Add(conversation);
@@ -186,7 +183,7 @@ public class VoiceAgentController(
                     request.Address,
                     request.Language,
                     request.DurationSeconds,
-                    Gigahoo.Api.Services.TimeZoneResolver.FormatLocal(conversation.DateTimeUtc, account.Region?.Name),
+                    Gigahoo.Api.Services.TimeZoneResolver.FormatLocal(conversation.CreatedDate, account.Region?.Name),
                     request.Summary);
             }
             catch (Exception ex)

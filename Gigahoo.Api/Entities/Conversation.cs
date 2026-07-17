@@ -6,7 +6,6 @@ public class Conversation
     public Guid AccountId { get; set; }
     public string? CallerName { get; set; }
     public string CallerPhoneNumber { get; set; } = null!;
-    public DateTime DateTimeUtc { get; set; }
     public int DurationSeconds { get; set; }
     public byte? LanguageId { get; set; }
     public string? Summary { get; set; }
@@ -14,7 +13,7 @@ public class Conversation
     public bool IsEmergency { get; set; }
     public byte ConversationStatusId { get; set; } = 1; // FK -> ConversationStatus (1 = Missed)
     public byte ConversationTypeId { get; set; } = 1;   // FK -> ConversationType (1 = Phone Call)
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedDate { get; set; }
 
     public Account Account { get; set; } = null!;
     public Language? Language { get; set; }

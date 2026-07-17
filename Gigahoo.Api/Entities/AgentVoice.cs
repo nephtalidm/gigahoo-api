@@ -8,7 +8,7 @@ public class AgentVoice
     public int AgentVoiceId { get; set; }
     public int ProviderId { get; set; }
     public Provider Provider { get; set; } = null!;
-    public string ApiName { get; set; } = null!;  // provider voice id passed to the TTS engine
+    public string ReferenceId { get; set; } = null!;  // provider voice id passed to the TTS engine
     public string Label { get; set; } = null!;     // human-friendly label shown in the picker
     public string? Gender { get; set; }            // "male" | "female" — picker grouping
     public byte? LanguageId { get; set; }          // FK -> Language: the language this voice speaks
