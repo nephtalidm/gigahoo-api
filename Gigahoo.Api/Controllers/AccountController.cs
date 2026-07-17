@@ -17,7 +17,7 @@ public class AccountController(
     GigahooDbContext db,
     IJwtTokenService jwt,
     IGoogleAuthService googleAuth,
-    IStripeService stripe,
+    IPaymentProviderRegistry payments,
     ITwilioService twilio,
     ITelephonyProvider telephony,
     IEmailService email,
@@ -167,12 +167,13 @@ public class AccountController(
         }
         else
         {
-            // PAID plan: create the Stripe customer (best-effort), then persist. The
-            // phone number is provisioned at checkout / the invoice.paid webhook.
-            if (plan is not null && string.IsNullOrEmpty(account.StripeCustomerId))
+            // PAID plan: ensure the payment-provider customer exists (best-effort) via the
+            // provider seam, which owns the PaymentCustomer rows. The phone number is
+            // provisioned at checkout / the invoice.paid webhook.
+            if (plan is not null)
             {
-                try { account.StripeCustomerId = await stripe.CreateCustomerAsync(account.Email!, account.BusinessName); }
-                catch (Exception ex) { logger.LogError(ex, "Failed to create Stripe customer at signup for account {Account}", account.AccountId); }
+                try { await payments.Default.EnsureCustomerAsync(account); }
+                catch (Exception ex) { logger.LogError(ex, "Failed to create payment customer at signup for account {Account}", account.AccountId); }
             }
             await db.SaveChangesAsync();
         }

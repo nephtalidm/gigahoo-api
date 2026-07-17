@@ -6,9 +6,8 @@ using PaymentCustomer = Gigahoo.Api.Entities.PaymentCustomer;
 
 namespace Gigahoo.Api.Services;
 
-// Stripe implementation of the payment-provider seam. Stores the Stripe customer id
-// in PaymentCustomer (provider "stripe") and, for backward-compat with existing
-// code/transition, mirrors it onto Account.StripeCustomerId.
+// Stripe implementation of the payment-provider seam. The Stripe customer id lives in
+// PaymentCustomer (provider "stripe") — the ONE source of truth for provider identities.
 public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) : IPaymentProvider
 {
     public string Name => "stripe";
@@ -40,9 +39,6 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
             ProviderId = providerRow.ProviderId,
             CustomerId = customer.Id,
         });
-
-        // Backward-compat: keep Account.StripeCustomerId populated during transition.
-        account.StripeCustomerId = customer.Id;
 
         await db.SaveChangesAsync();
         return customer.Id;

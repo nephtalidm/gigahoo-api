@@ -67,8 +67,13 @@ public class StripeWebhookController(
     {
         if (session is null) return;
 
-        var account = await db.Accounts
-            .FirstOrDefaultAsync(a => a.StripeCustomerId == session.CustomerId);
+        var accountId = await db.PaymentCustomers
+            .Where(pc => pc.CustomerId == session.CustomerId)
+            .Select(pc => (Guid?)pc.AccountId)
+            .FirstOrDefaultAsync();
+        var account = accountId is null
+            ? null
+            : await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return;
 
         // Save subscription ID and upgrade plan
@@ -99,8 +104,13 @@ public class StripeWebhookController(
     {
         if (invoice is null) return;
 
-        var account = await db.Accounts
-            .FirstOrDefaultAsync(a => a.StripeCustomerId == invoice.CustomerId);
+        var invAccountId = await db.PaymentCustomers
+            .Where(pc => pc.CustomerId == invoice.CustomerId)
+            .Select(pc => (Guid?)pc.AccountId)
+            .FirstOrDefaultAsync();
+        var account = invAccountId is null
+            ? null
+            : await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == invAccountId);
         if (account is null) return;
 
         // Record the invoice

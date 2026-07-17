@@ -181,7 +181,6 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasOne(x => x.AccountLanguage).WithMany().HasForeignKey(x => x.AccountLanguageId).HasConstraintName("FK_Account_AccountLanguage").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).HasConstraintName("FK_Account_Region").OnDelete(DeleteBehavior.NoAction);
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
-            e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
         });
 
         // Conversation

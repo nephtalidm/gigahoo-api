@@ -31,7 +31,6 @@ public class Account
     public string? PostalCode { get; set; }
     public short? CountryCodeId { get; set; }
 
-    public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
     // The Gigahoo number assigned to this account (FK -> PhoneNumber). Replaces the old
     // denormalized PhoneNumberSid/ForwardingPhone copies of the PhoneNumber row's data.
