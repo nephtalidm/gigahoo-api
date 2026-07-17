@@ -94,7 +94,10 @@ public class VoiceAgentController(
             account.CollectPhone,
             account.CollectAddress,
             account.CollectEmergency,
-            account.AccountLanguage
+            account.AccountLanguageId is null ? null : await db.Languages
+                .Where(l => l.LanguageId == account.AccountLanguageId)
+                .Select(l => l.Code)
+                .FirstOrDefaultAsync()
         ));
     }
 

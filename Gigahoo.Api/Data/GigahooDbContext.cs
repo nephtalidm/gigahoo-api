@@ -156,7 +156,13 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
         });
 
         // Language
-        modelBuilder.Entity<Language>().ToTable("Language").HasKey(e => e.LanguageId);
+        modelBuilder.Entity<Language>(e =>
+        {
+            e.ToTable("Language");
+            e.HasKey(x => x.LanguageId);
+            e.Property(x => x.Code).HasMaxLength(10);
+            e.HasIndex(x => x.Code).IsUnique().HasFilter("[Code] IS NOT NULL");
+        });
 
         // Region
         modelBuilder.Entity<Region>(e =>
@@ -181,11 +187,11 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.BusinessCategoryId).HasConstraintName("FK_Account_Category").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.AgentVoice).WithMany().HasForeignKey(x => x.AgentVoiceId).HasConstraintName("FK_Account_AgentVoice").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.AssignedPhoneNumber).WithMany().HasForeignKey(x => x.AssignedPhoneNumberId).HasConstraintName("FK_Account_AssignedPhoneNumber").OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.AccountLanguage).WithMany().HasForeignKey(x => x.AccountLanguageId).HasConstraintName("FK_Account_AccountLanguage").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).HasConstraintName("FK_Account_Region").OnDelete(DeleteBehavior.NoAction);
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
-            e.Property(x => x.AccountLanguage).HasMaxLength(10);
         });
 
         // Conversation

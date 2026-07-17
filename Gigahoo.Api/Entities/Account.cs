@@ -19,9 +19,10 @@ public class Account
     public string PhoneCountryCode { get; set; } = "US";
     public string? WebsiteUrl { get; set; }
     public string? BusinessHours { get; set; }
-    // Preferred dashboard/website language (BCP-47-ish locale, e.g. "en", "es",
-    // "yue"). Defaults to the locale the user signed up in. NULL = not set.
-    public string? AccountLanguage { get; set; }
+    // Preferred dashboard/website language (FK -> Language; matched by Language.Code).
+    // Defaults to the locale the user signed up in. NULL = not set.
+    public byte? AccountLanguageId { get; set; }
+    public Language? AccountLanguage { get; set; }
     public byte PlanId { get; set; } = 2;
 
     public string? AddressLine1 { get; set; }

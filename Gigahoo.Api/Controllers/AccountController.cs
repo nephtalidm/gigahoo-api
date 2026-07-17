@@ -28,13 +28,6 @@ public class AccountController(
 {
     private Guid GetAccountId() => Guid.Parse(User.FindFirst("account_id")!.Value);
 
-    // The website/dashboard locales Gigahoo supports. Keep in sync with the UI's
-    // lib/i18n/config.ts locale list.
-    private static readonly HashSet<string> SupportedLocales = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "en", "es", "fr", "zh", "yue", "hi", "pa", "tl", "ko", "ja", "ru", "uk", "ar", "fa"
-    };
-
     [HttpPost]
     public async Task<ActionResult<AccountResponse>> Create([FromBody] CreateAccountRequest request)
     {
@@ -91,10 +84,12 @@ public class AccountController(
         account.RegionId = request.RegionId;
         account.PostalCode = request.PostalCode;
         // Default the dashboard language to the locale the user signed up in,
-        // falling back to English when missing or unsupported.
-        account.AccountLanguage = request.Language is not null && SupportedLocales.Contains(request.Language)
-            ? request.Language.ToLowerInvariant()
-            : "en";
+        // falling back to English when missing or unsupported. Locales are Language
+        // rows now (matched by Code) — ONE language system.
+        var signupLocale = (request.Language ?? "en").Trim().ToLowerInvariant();
+        account.AccountLanguageId =
+            await db.Languages.Where(l => l.Code == signupLocale).Select(l => (byte?)l.LanguageId).FirstOrDefaultAsync()
+            ?? await db.Languages.Where(l => l.Code == "en").Select(l => (byte?)l.LanguageId).FirstOrDefaultAsync();
         // Gigahoo only serves countries flagged IsSupported in the Country table —
         // reject any other business country before saving.
         var supported = await db.Countries.AnyAsync(c => c.Code == request.CountryCode && c.IsSupported);
@@ -486,18 +481,22 @@ public class AccountController(
     [HttpPut("language")]
     public async Task<IActionResult> UpdateLanguage([FromBody] UpdateAccountLanguageRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Language) || !SupportedLocales.Contains(request.Language))
+        var code = request.Language?.Trim().ToLowerInvariant();
+        var language = string.IsNullOrWhiteSpace(code)
+            ? null
+            : await db.Languages.FirstOrDefaultAsync(l => l.Code == code);
+        if (language is null)
             return BadRequest(new { error = "Unsupported language." });
 
         var accountId = GetAccountId();
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
-        account.AccountLanguage = request.Language.ToLowerInvariant();
+        account.AccountLanguageId = language.LanguageId;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new { language = account.AccountLanguage });
+        return Ok(new { language = language.Code });
     }
 
     private async Task<AccountResponse> MapToResponse(Account account)
@@ -559,7 +558,10 @@ public class AccountController(
                 .Select(v => v.ApiName)
                 .FirstOrDefaultAsync(),
             account.MaximumCallMinutes,
-            account.AccountLanguage ?? "",
+            account.AccountLanguageId is null ? "" : await db.Languages
+                .Where(l => l.LanguageId == account.AccountLanguageId)
+                .Select(l => l.Code)
+                .FirstOrDefaultAsync() ?? "",
             Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName),
             account.CollectName,
             account.CollectPhone,
