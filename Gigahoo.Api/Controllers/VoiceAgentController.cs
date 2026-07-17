@@ -90,10 +90,10 @@ public class VoiceAgentController(
             greetingMessage,
             omniVoice,
             account.MaximumCallMinutes,
-            account.CollectName,
-            account.CollectPhone,
-            account.CollectAddress,
-            account.CollectEmergency,
+            account.ShouldCollectName,
+            account.ShouldCollectPhone,
+            account.ShouldCollectAddress,
+            account.ShouldCollectEmergency,
             account.AccountLanguageId is null ? null : await db.Languages
                 .Where(l => l.LanguageId == account.AccountLanguageId)
                 .Select(l => l.Code)
@@ -174,7 +174,7 @@ public class VoiceAgentController(
 
         // Best-effort post-call summary to the owner per their notification settings.
         // Each channel is isolated in try/catch so a delivery failure never fails the call save.
-        if (account.EmailCallNotifications && !string.IsNullOrWhiteSpace(account.Email))
+        if (account.ShouldSendCallSummaryEmail && !string.IsNullOrWhiteSpace(account.Email))
         {
             try
             {
@@ -195,7 +195,7 @@ public class VoiceAgentController(
             }
         }
 
-        if (account.SmsCallNotifications)
+        if (account.ShouldSendCallSummarySms)
         {
             var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrWhiteSpace(ownerPhone))

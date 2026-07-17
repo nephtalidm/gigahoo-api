@@ -403,7 +403,7 @@ public class AccountController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
-        return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
+        return Ok(new CallNotificationsResponse(account.ShouldSendCallSummaryEmail, account.ShouldSendCallSummarySms));
     }
 
     [HttpPut("notifications")]
@@ -413,12 +413,12 @@ public class AccountController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
-        account.EmailCallNotifications = request.EmailCallNotifications;
-        account.SmsCallNotifications = request.SmsCallNotifications;
+        account.ShouldSendCallSummaryEmail = request.EmailCallNotifications;
+        account.ShouldSendCallSummarySms = request.SmsCallNotifications;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new CallNotificationsResponse(account.EmailCallNotifications, account.SmsCallNotifications));
+        return Ok(new CallNotificationsResponse(account.ShouldSendCallSummaryEmail, account.ShouldSendCallSummarySms));
     }
 
     [HttpPut("questions")]
@@ -428,10 +428,10 @@ public class AccountController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
         if (account is null) return NotFound();
 
-        account.CollectName = request.CollectName;
-        account.CollectPhone = request.CollectPhone;
-        account.CollectAddress = request.CollectAddress;
-        account.CollectEmergency = request.CollectEmergency;
+        account.ShouldCollectName = request.CollectName;
+        account.ShouldCollectPhone = request.CollectPhone;
+        account.ShouldCollectAddress = request.CollectAddress;
+        account.ShouldCollectEmergency = request.CollectEmergency;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
@@ -547,8 +547,8 @@ public class AccountController(
             account.PasswordHash is not null,
             account.GoogleSubjectId is not null,
             account.PasswordHash is not null && account.GoogleSubjectId is null && !account.IsPhoneConfirmed,
-            account.EmailCallNotifications,
-            account.SmsCallNotifications,
+            account.ShouldSendCallSummaryEmail,
+            account.ShouldSendCallSummarySms,
             account.GreetingMessage,
             account.AgentVoiceId is null ? null : await db.AgentVoices
                 .Where(v => v.AgentVoiceId == account.AgentVoiceId)
@@ -560,10 +560,10 @@ public class AccountController(
                 .Select(l => l.Code)
                 .FirstOrDefaultAsync() ?? "",
             Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName),
-            account.CollectName,
-            account.CollectPhone,
-            account.CollectAddress,
-            account.CollectEmergency
+            account.ShouldCollectName,
+            account.ShouldCollectPhone,
+            account.ShouldCollectAddress,
+            account.ShouldCollectEmergency
         );
     }
 }

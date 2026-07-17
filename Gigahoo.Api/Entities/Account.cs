@@ -43,14 +43,14 @@ public class Account
     public DateTime? LimitNotifiedAt { get; set; }
 
     // Per-account post-call notification preferences (owner gets a summary per call).
-    public bool EmailCallNotifications { get; set; } = true;
-    public bool SmsCallNotifications { get; set; } = true;
+    public bool ShouldSendCallSummaryEmail { get; set; } = true;
+    public bool ShouldSendCallSummarySms { get; set; } = true;
 
     // Per-account "Questions" — which details the agent collects (default on). Off = don't ask/collect, and hide downstream.
-    public bool CollectName { get; set; } = true;
-    public bool CollectPhone { get; set; } = true;
-    public bool CollectAddress { get; set; } = true;
-    public bool CollectEmergency { get; set; } = true;
+    public bool ShouldCollectName { get; set; } = true;
+    public bool ShouldCollectPhone { get; set; } = true;
+    public bool ShouldCollectAddress { get; set; } = true;
+    public bool ShouldCollectEmergency { get; set; } = true;
 
     // AI voice agent settings: custom call greeting + selected voice (NULL = default).
     public string? GreetingMessage { get; set; }
