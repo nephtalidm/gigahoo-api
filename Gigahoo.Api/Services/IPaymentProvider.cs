@@ -26,4 +26,4 @@ public interface IPaymentProvider
     Task SetDefaultPaymentMethodAsync(string customerId, string paymentMethodId);
 }
 
-public record PaymentMethodInfo(string Id, string Brand, string Last4, long ExpMonth, long ExpYear, bool IsDefault = false);
+public record PaymentMethodInfo(string Id, string Brand, string Last4, long ExpMonth, long ExpYear, bool IsDefault = false, string? Fingerprint = null);

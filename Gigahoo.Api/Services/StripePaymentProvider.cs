@@ -77,7 +77,8 @@ public class StripePaymentProvider(GigahooDbContext db, IConfiguration config) :
                 pm.Card?.Last4 ?? "",
                 pm.Card?.ExpMonth ?? 0,
                 pm.Card?.ExpYear ?? 0,
-                pm.Id == defaultId))
+                pm.Id == defaultId,
+                pm.Card?.Fingerprint))
             .ToList();
         return Task.FromResult(result);
     }

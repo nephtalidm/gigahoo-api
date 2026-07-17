@@ -269,6 +269,24 @@ public class BillingController(
         {
             var paymentProvider = payments.Get(customer.Provider.Code);
             var methods = await paymentProvider.ListPaymentMethodsAsync(customer.CustomerId);
+            // Duplicate-card prevention (deterministic, code-owned): the same physical card
+            // has the same provider fingerprint regardless of how it was tokenized. Keep ONE
+            // copy — the default if it's among the duplicates, else the oldest — detach the rest.
+            var dupGroups = methods
+                .Where(m => m.Fingerprint != null)
+                .GroupBy(m => m.Fingerprint)
+                .Where(g => g.Count() > 1)
+                .ToList();
+            if (dupGroups.Count > 0)
+            {
+                foreach (var g in dupGroups)
+                {
+                    var keep = g.FirstOrDefault(m => m.IsDefault) ?? g.Last(); // provider lists newest-first; Last() = oldest
+                    foreach (var dup in g.Where(m => m.Id != keep.Id))
+                        await paymentProvider.DetachPaymentMethodAsync(dup.Id);
+                }
+                methods = await paymentProvider.ListPaymentMethodsAsync(customer.CustomerId);
+            }
             // Common practice, enforced self-healingly on read: a customer WITH cards but NO
             // default gets the first promoted automatically — covers the just-added first card
             // (Stripe doesn't default SetupIntent cards on its own) and a deleted default.

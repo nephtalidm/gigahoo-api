@@ -223,8 +223,72 @@ public class StripeWebhookController(
 
     private async Task HandlePaymentFailed(Stripe.Invoice? invoice)
     {
-        if (invoice is null) return;
+        if (invoice is null || invoice.Id is null || invoice.CustomerId is null) return;
         logger.LogWarning("Payment failed for invoice {InvoiceId}, customer {CustomerId}", invoice.Id, invoice.CustomerId);
+
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+        var invoiceService = new InvoiceService();
+
+        // Work from a FRESH copy: the webhook payload is a snapshot. A paid invoice needs
+        // nothing; and our own failed fallback attempts fire invoice.payment_failed again,
+        // so a metadata marker guarantees each invoice is walked exactly once.
+        var fresh = await invoiceService.GetAsync(invoice.Id);
+        if (fresh.Status == "paid") return;
+        if (fresh.Metadata is not null && fresh.Metadata.ContainsKey("gigahoo_fallback_attempted")) return;
+        await invoiceService.UpdateAsync(invoice.Id, new InvoiceUpdateOptions
+        {
+            Metadata = new Dictionary<string, string> { ["gigahoo_fallback_attempted"] = "true" },
+        });
+
+        // FALLBACK WALKER: Stripe's automatic retries only ever hit the DEFAULT card. Walk
+        // the customer's OTHER saved cards oldest-first and try to pay THIS invoice. An
+        // invoice can only be paid once, so a racing Stripe retry can never double-charge.
+        var customerService = new CustomerService();
+        var customer = await customerService.GetAsync(invoice.CustomerId);
+        var defaultPm = customer.InvoiceSettings?.DefaultPaymentMethodId;
+        var cards = await new PaymentMethodService().ListAsync(new PaymentMethodListOptions
+        {
+            Customer = invoice.CustomerId,
+            Type = "card",
+        });
+        var fallbacks = cards.Data.Where(c => c.Id != defaultPm).Reverse().ToList(); // oldest first
+
+        string? paidWith = null;
+        foreach (var card in fallbacks)
+        {
+            try
+            {
+                await invoiceService.PayAsync(invoice.Id, new InvoicePayOptions { PaymentMethod = card.Id });
+                paidWith = card.Id;
+                // The card that worked becomes the default, so NEXT period charges it first
+                // instead of failing and falling back again.
+                await customerService.UpdateAsync(invoice.CustomerId, new CustomerUpdateOptions
+                {
+                    InvoiceSettings = new CustomerInvoiceSettingsOptions { DefaultPaymentMethod = card.Id },
+                });
+                logger.LogInformation("Invoice {InvoiceId} paid with fallback card {Card}; promoted to default", invoice.Id, card.Id);
+                break;
+            }
+            catch (StripeException ex)
+            {
+                logger.LogWarning("Fallback card {Card} declined for invoice {InvoiceId}: {Message}", card.Id, invoice.Id, ex.Message);
+            }
+        }
+
+        // Tell the owner what happened (best effort, never fails the webhook).
+        var fallbackAccountId = await db.PaymentCustomers
+            .Where(pc => pc.CustomerId == invoice.CustomerId)
+            .Select(pc => (Guid?)pc.AccountId)
+            .FirstOrDefaultAsync();
+        var account = fallbackAccountId is null ? null : await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == fallbackAccountId);
+        if (!string.IsNullOrWhiteSpace(account?.BusinessPhoneNumber))
+        {
+            var msg = paidWith is not null
+                ? "Gigahoo: your default card was declined, so we charged your backup card and made it your new default."
+                : "Gigahoo: your payment failed and none of your saved cards could be charged. Please update your payment method in the dashboard.";
+            try { await smsProvider.SendAsync(account!.BusinessPhoneNumber!, msg); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send payment-failed SMS for account {Account}", account!.AccountId); }
+        }
     }
 
     private async Task HandleSubscriptionUpdated(Subscription? subscription)
