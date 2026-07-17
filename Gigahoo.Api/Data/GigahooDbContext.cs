@@ -180,13 +180,12 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.Property(x => x.NormalizedEmail).HasMaxLength(256);
             e.Property(x => x.NormalizedPhone).HasMaxLength(50);
             e.HasOne(x => x.Plan).WithMany().HasForeignKey(x => x.PlanId).HasConstraintName("FK_Account_Plan").OnDelete(DeleteBehavior.NoAction);
-            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).HasConstraintName("FK_Account_Category").OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.BusinessCategoryId).HasConstraintName("FK_Account_Category").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).HasConstraintName("FK_Account_Region").OnDelete(DeleteBehavior.NoAction);
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");
             e.Property(x => x.PhoneCountryCode).IsFixedLength().HasMaxLength(2);
             e.Property(x => x.AccountLanguage).HasMaxLength(10);
-            e.HasOne(x => x.LlmProvider).WithMany().HasForeignKey(x => x.LlmProviderId).HasConstraintName("FK_Account_LlmProvider").OnDelete(DeleteBehavior.NoAction);
         });
 
         // Conversation

@@ -18,7 +18,7 @@ public class Account
 
     // Business profile
     public string? BusinessName { get; set; }
-    public byte? CategoryId { get; set; }
+    public byte? BusinessCategoryId { get; set; }
     public string? BusinessPhone { get; set; }
     public string PhoneCountryCode { get; set; } = "US";
     public string? ServiceArea { get; set; }
@@ -39,7 +39,6 @@ public class Account
 
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
-    public int? LlmProviderId { get; set; }
     public string? PhoneNumberSid { get; set; }
     public string? TelephonyProvider { get; set; }
     public DateOnly? BillingPeriodStart { get; set; }
@@ -70,27 +69,10 @@ public class Account
     // NULL = Unlimited (an explicit opt-out chosen from the dashboard).
     public int? MaximumCallMinutes { get; set; } = 10;
 
-    // Feature settings (Business plan only)
-    public bool AnswerQuestions { get; set; }
-    public string? ServicesInfo { get; set; }
-    public string? FeatureServiceAreas { get; set; }
-    public string? FeatureBusinessHours { get; set; }
-    public string? EmergencyAvailability { get; set; }
-    public string? PricingPolicy { get; set; }
-    public string? WarrantyPolicy { get; set; }
-    public string? FrequentlyAskedQuestions { get; set; }
-    public string? AdditionalBusinessInfo { get; set; }
-    public bool ServeArea { get; set; }
-    public int DistanceKm { get; set; } = 50;
-    public bool QuoteInspection { get; set; }
-    public decimal PricePerKm { get; set; }
-    public DateTime FeatureUpdatedAt { get; set; }
-
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
     public Plan Plan { get; set; } = null!;
-    public Provider? LlmProvider { get; set; }
     public BusinessCategory? Category { get; set; }
     public Region? Region { get; set; }
     public ICollection<Conversation> Conversations { get; set; } = [];

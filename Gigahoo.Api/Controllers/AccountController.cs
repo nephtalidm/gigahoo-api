@@ -80,7 +80,7 @@ public class AccountController(
         }
 
         account.BusinessName = request.BusinessName;
-        account.CategoryId = request.CategoryId;
+        account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhone = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
@@ -225,7 +225,7 @@ public class AccountController(
         }
 
         account.BusinessName = request.BusinessName;
-        account.CategoryId = request.CategoryId;
+        account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhone = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
@@ -523,7 +523,7 @@ public class AccountController(
     private async Task<AccountResponse> MapToResponse(Account account)
     {
         var plan = account.Plan ?? await db.Plans.FindAsync(account.PlanId);
-        var category = account.Category ?? await db.BusinessCategories.FindAsync(account.CategoryId);
+        var category = account.Category ?? await db.BusinessCategories.FindAsync(account.BusinessCategoryId);
         var country = await db.Countries.FindAsync(account.CountryCodeId);
 
         string? regionName = null;
@@ -541,7 +541,7 @@ public class AccountController(
             account.AccountId,
             account.BusinessName ?? "",
             category?.Name ?? "",
-            account.CategoryId ?? 0,
+            account.BusinessCategoryId ?? 0,
             account.BusinessPhone ?? "",
             account.PhoneCountryCode,
             account.Email,

@@ -84,14 +84,6 @@ public class VoiceAgentController(
             regionName,
             account.PostalCode,
             await db.Countries.FindAsync(account.CountryCodeId) is { } country ? country.Name : "",
-            new VoiceAgentFeatureSettings(
-                account.AnswerQuestions,
-                account.ServicesInfo,
-                account.ServeArea,
-                account.DistanceKm,
-                account.QuoteInspection,
-                account.PricePerKm
-            ),
             minutesRemaining,
             canAnswer,
             greetingMessage,
@@ -241,7 +233,6 @@ public record VoiceAgentAccountResponse(
     string? Region,
     string? PostalCode,
     string Country,
-    VoiceAgentFeatureSettings Features,
     int MinutesRemaining,
     bool CanAnswer,
     string GreetingMessage,
@@ -254,15 +245,6 @@ public record VoiceAgentAccountResponse(
     string? AgentStyle,
     string? AgentInstruct,
     string? AccountLanguage
-);
-
-public record VoiceAgentFeatureSettings(
-    bool AnswerQuestions,
-    string? ServicesInfo,
-    bool ServeArea,
-    int DistanceKm,
-    bool QuoteInspection,
-    decimal PricePerKm
 );
 
 public record CreateConversationRequest(
