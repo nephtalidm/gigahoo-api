@@ -51,7 +51,7 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
                 if (reuse.AssignedAccountId is Guid prevId)
                 {
                     var prev = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == prevId);
-                    if (prev is not null) { prev.PhoneNumberSid = null; prev.ForwardingPhone = null; }
+                    if (prev is not null) { prev.AssignedPhoneNumberId = null; }
                 }
                 reuse.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available;
                 reuse.AssignedAccountId = null;

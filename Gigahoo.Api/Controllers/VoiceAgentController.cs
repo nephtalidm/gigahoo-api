@@ -64,9 +64,11 @@ public class VoiceAgentController(
         // The omni realtime session only accepts a qwen voice. If the account picked a CosyVoice
         // voice (for the TTS pipeline), it must NOT be sent to the omni or the session errors —
         // fall back to the omni default (null) here so live calls never break on a TTS voice.
-        var omniVoice = account.AgentVoice;
-        if (omniVoice is not null && !await db.Voices.AnyAsync(v =>
-                v.IsActive && v.ApiName == omniVoice && v.Provider.Code == "qwen" && v.Provider.ProviderTypeId == 1))
+        var voiceRow = account.AgentVoiceId is null ? null : await db.AgentVoices
+            .Include(v => v.Provider)
+            .FirstOrDefaultAsync(v => v.AgentVoiceId == account.AgentVoiceId);
+        var omniVoice = voiceRow?.ApiName;
+        if (omniVoice is not null && !(voiceRow!.IsActive && voiceRow.Provider!.Code == "qwen" && voiceRow.Provider.ProviderTypeId == 1))
             omniVoice = null;
 
         return Ok(new VoiceAgentAccountResponse(
@@ -74,9 +76,8 @@ public class VoiceAgentController(
             account.BusinessName,
             account.Category?.Name ?? "Other",
             account.Category?.ServiceDescription ?? "service need",
-            account.BusinessPhone,
+            account.BusinessPhoneNumber,
             account.Email,
-            account.ServiceArea,
             account.BusinessHours,
             account.WebsiteUrl,
             account.AddressLine1,
@@ -94,7 +95,6 @@ public class VoiceAgentController(
             account.CollectAddress,
             account.CollectEmergency,
             account.AgentStyle,
-            account.AgentInstruct,
             account.AccountLanguage
         ));
     }
@@ -138,7 +138,7 @@ public class VoiceAgentController(
         // Notify the owner once per billing period when they first cross their limit.
         if (remaining <= 0 && account.LimitNotifiedAt is null)
         {
-            var ownerPhone = account.PhoneNumber ?? account.ForwardingPhone;
+            var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrWhiteSpace(ownerPhone))
             {
                 try
@@ -195,7 +195,7 @@ public class VoiceAgentController(
 
         if (account.SmsCallNotifications)
         {
-            var ownerPhone = account.PhoneNumber ?? account.ForwardingPhone;
+            var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrWhiteSpace(ownerPhone))
             {
                 try
@@ -225,7 +225,6 @@ public record VoiceAgentAccountResponse(
     string ServiceDescription,
     string BusinessPhone,
     string Email,
-    string? ServiceArea,
     string? BusinessHours,
     string? WebsiteUrl,
     string? AddressLine1,
@@ -243,7 +242,6 @@ public record VoiceAgentAccountResponse(
     bool CollectAddress,
     bool CollectEmergency,
     string? AgentStyle,
-    string? AgentInstruct,
     string? AccountLanguage
 );
 

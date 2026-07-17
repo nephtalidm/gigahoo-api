@@ -7,11 +7,8 @@ public class Account
     // Auth identity (merged from User)
     public string? Email { get; set; }
     public string? NormalizedEmail { get; set; }
-    public string? PhoneNumber { get; set; }
-    public string? NormalizedPhone { get; set; }
     public string? GoogleSubjectId { get; set; }
     public string? PasswordHash { get; set; }
-    public string? DisplayName { get; set; }
     public bool IsEmailConfirmed { get; set; }
     public bool IsPhoneConfirmed { get; set; }
     public DateTime? LastLoginAt { get; set; }
@@ -19,12 +16,10 @@ public class Account
     // Business profile
     public string? BusinessName { get; set; }
     public byte? BusinessCategoryId { get; set; }
-    public string? BusinessPhone { get; set; }
+    public string? BusinessPhoneNumber { get; set; }
     public string PhoneCountryCode { get; set; } = "US";
-    public string? ServiceArea { get; set; }
     public string? WebsiteUrl { get; set; }
     public string? BusinessHours { get; set; }
-    public string? ForwardingPhone { get; set; }
     // Preferred dashboard/website language (BCP-47-ish locale, e.g. "en", "es",
     // "yue"). Defaults to the locale the user signed up in. NULL = not set.
     public string? AccountLanguage { get; set; }
@@ -39,8 +34,10 @@ public class Account
 
     public string? StripeCustomerId { get; set; }
     public string? StripeSubscriptionId { get; set; }
-    public string? PhoneNumberSid { get; set; }
-    public string? TelephonyProvider { get; set; }
+    // The Gigahoo number assigned to this account (FK -> PhoneNumber). Replaces the old
+    // denormalized PhoneNumberSid/ForwardingPhone copies of the PhoneNumber row's data.
+    public Guid? AssignedPhoneNumberId { get; set; }
+    public PhoneNumber? AssignedPhoneNumber { get; set; }
     public DateOnly? BillingPeriodStart { get; set; }
     public DateOnly? BillingPeriodEnd { get; set; }
     public int MinutesUsed { get; set; }
@@ -56,13 +53,12 @@ public class Account
     public bool CollectAddress { get; set; } = true;
     public bool CollectEmergency { get; set; } = true;
 
-    // AI voice agent settings: custom call greeting + selected Qwen voice (NULL = default).
+    // AI voice agent settings: custom call greeting + selected voice (NULL = default).
     public string? GreetingMessage { get; set; }
-    public string? AgentVoice { get; set; }
+    public int? AgentVoiceId { get; set; }      // FK -> AgentVoice
+    public AgentVoice? AgentVoice { get; set; }
     // Voice emotion (CosyVoice native emotion value: neutral|happy|sad|angry|fearful|surprised|disgusted).
     public string? AgentStyle { get; set; }
-    // Optional CosyVoice instruct context key ("scenario:…"|"role:…"|"identity:…"); pairs with AgentStyle.
-    public string? AgentInstruct { get; set; }
 
     // Per-call hard cap (kill switch): the longest a single call may run before the voice agent
     // forcibly ends it, no matter how productive the call is. Minutes. Defaults to 10;

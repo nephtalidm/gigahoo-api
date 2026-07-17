@@ -21,7 +21,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<VoiceResponse>>> Get()
     {
-        var rows = await db.Voices
+        var rows = await db.AgentVoices
             .Where(v => v.IsActive && v.Provider.Code == "fish" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.LanguageId).ThenBy(v => v.DisplayOrder)
             .Select(v => new
@@ -51,12 +51,12 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     [HttpGet("lab")]
     public async Task<ActionResult<LabResponse>> Lab()
     {
-        var cosy = await db.Voices
+        var cosy = await db.AgentVoices
             .Where(v => v.IsActive && v.Provider.Code == "cosyvoice" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
             .Select(v => new LabVoice(v.ApiName, v.Label))
             .ToListAsync();
-        var qwen = await db.Voices
+        var qwen = await db.AgentVoices
             .Where(v => v.IsActive && v.Provider.Code == "qwen-tts" && v.Provider.ProviderTypeId == 1)
             .OrderBy(v => v.DisplayOrder)
             .Select(v => new LabVoice(v.ApiName, v.Label))

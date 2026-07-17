@@ -41,7 +41,6 @@ public class AuthController(
             if (account is not null)
             {
                 account.GoogleSubjectId = payload.Subject;
-                account.DisplayName ??= payload.Name;
                 account.IsEmailConfirmed = true;
                 account.LastLoginAt = DateTime.UtcNow;
             }
@@ -62,7 +61,6 @@ public class AuthController(
                     Email = payload.Email,
                     NormalizedEmail = payload.Email.ToLowerInvariant(),
                     GoogleSubjectId = payload.Subject,
-                    DisplayName = payload.Name,
                     IsEmailConfirmed = payload.EmailVerified,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow,
@@ -184,10 +182,9 @@ public class AuthController(
     [HttpPost("sms/send")]
     public async Task<IActionResult> SendSmsCode([FromBody] SendSmsCodeRequest request)
     {
-        // Whether an account already owns this phone, using the same NormalizedPhone
-        // lookup that sms/verify uses.
-        var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
-        var exists = await db.Accounts.AnyAsync(a => a.NormalizedPhone == normalizedPhone);
+        // Whether an account already owns this phone (same business-phone matching rule
+        // that sms/verify uses).
+        var exists = await FindAccountByPhoneAsync(request.PhoneNumber) is not null;
 
         // Block NEW-account signups from non-supported / coming-soon markets. Existing
         // accounts (login) always proceed.
@@ -215,37 +212,16 @@ public class AuthController(
         var valid = await otp.VerifyAsync(request.PhoneNumber, "SmsVerification", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
-        var normalizedPhone = request.PhoneNumber.Replace(" ", "").Replace("-", "");
-        var incomingDigits = new string(request.PhoneNumber.Where(char.IsDigit).ToArray());
-
-        // Match the auth phone first; otherwise link to an account whose BUSINESS
-        // phone is the same FULL number — its local digits plus its country's dial
-        // code — compared as full E.164 digits, so the same local number in two
-        // different countries can never collide.
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == normalizedPhone);
-        if (account is null && incomingDigits.Length >= 8)
-        {
-            var dialByCountry = await db.Countries
-                .ToDictionaryAsync(c => c.Code, c => new string(c.DialCode.Where(char.IsDigit).ToArray()));
-            var candidates = await db.Accounts
-                .Where(a => a.NormalizedPhone == null && a.BusinessPhone != null)
-                .ToListAsync();
-            account = candidates.FirstOrDefault(a =>
-            {
-                var bizDigits = new string(a.BusinessPhone!.Where(char.IsDigit).ToArray());
-                var dial = dialByCountry.TryGetValue(a.PhoneCountryCode, out var d) ? d : "";
-                // Business phone may be stored with or without the country code.
-                return incomingDigits == dial + bizDigits || incomingDigits == bizDigits;
-            });
-        }
+        var account = await FindAccountByPhoneAsync(request.PhoneNumber);
         var isNew = account is null;
 
         if (isNew)
         {
             account = new Account
             {
-                PhoneNumber = request.PhoneNumber,
-                NormalizedPhone = normalizedPhone,
+                // The number they authenticated with becomes the business phone — the ONE
+                // phone identity an account has (used for future SMS logins too).
+                BusinessPhoneNumber = request.PhoneNumber,
                 IsPhoneConfirmed = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
@@ -257,7 +233,6 @@ public class AuthController(
         {
             account.LastLoginAt = DateTime.UtcNow;
             account.IsPhoneConfirmed = true;
-            account.NormalizedPhone ??= normalizedPhone; // link for next time
         }
 
         await db.SaveChangesAsync();
@@ -266,5 +241,23 @@ public class AuthController(
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
         return Ok(new AuthResponse(accessToken, expiresAt, isNew));
+    }
+    // The ONE phone-matching rule for SMS auth: an account is identified by its BUSINESS
+    // phone number - its local digits plus its country's dial code - compared as full
+    // E.164 digits, so the same local number in two countries can never collide.
+    private async Task<Account?> FindAccountByPhoneAsync(string phoneNumber)
+    {
+        var incomingDigits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        if (incomingDigits.Length < 8) return null;
+        var dialByCountry = await db.Countries
+            .ToDictionaryAsync(c => c.Code, c => new string(c.DialCode.Where(char.IsDigit).ToArray()));
+        var candidates = await db.Accounts.Where(a => a.BusinessPhoneNumber != null).ToListAsync();
+        return candidates.FirstOrDefault(a =>
+        {
+            var bizDigits = new string(a.BusinessPhoneNumber!.Where(char.IsDigit).ToArray());
+            var dial = dialByCountry.TryGetValue(a.PhoneCountryCode, out var d) ? d : "";
+            // The business phone may be stored with or without the country code.
+            return incomingDigits == dial + bizDigits || incomingDigits == bizDigits;
+        });
     }
 }

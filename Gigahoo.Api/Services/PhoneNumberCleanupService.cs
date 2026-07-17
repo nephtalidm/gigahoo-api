@@ -24,7 +24,7 @@ public class PhoneNumberCleanupService(
         // Find accounts with phone numbers that have no recent conversations
         var inactiveAccounts = await db.Accounts
             .Include(a => a.Conversations)
-            .Where(a => a.PhoneNumberSid != null)
+            .Where(a => a.AssignedPhoneNumberId != null)
             .Where(a => a.Conversations.All(c => c.DateTimeUtc < cutoffDate) || !a.Conversations.Any())
             .ToListAsync();
 
@@ -41,8 +41,6 @@ public class PhoneNumberCleanupService(
                 await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
 
                 // Clear the phone number reference from account
-                account.PhoneNumberSid = null;
-                account.TelephonyProvider = null;
                 account.UpdatedAt = DateTime.UtcNow;
 
                 logger.LogInformation(
@@ -80,7 +78,7 @@ public class PhoneNumberCleanupService(
                 p => p.AssignedAccountId,
                 a => a.AccountId,
                 (p, a) => new { Phone = p, Account = a })
-            .Where(x => x.Account.PhoneNumberSid != null && x.Account.StripeSubscriptionId == null)
+            .Where(x => x.Account.AssignedPhoneNumberId != null && x.Account.StripeSubscriptionId == null)
             .Select(x => x.Account)
             .ToListAsync();
 
@@ -92,9 +90,7 @@ public class PhoneNumberCleanupService(
             {
                 await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
 
-                account.PhoneNumberSid = null;
-                account.TelephonyProvider = null;
-                account.ForwardingPhone = null;
+                account.AssignedPhoneNumberId = null;
                 account.UpdatedAt = DateTime.UtcNow;
 
                 logger.LogInformation("Released abandoned phone reservation for account {AccountId}", account.AccountId);

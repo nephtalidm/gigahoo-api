@@ -35,7 +35,7 @@ public class VoiceController(
         // Validate the voice against the ACTIVE voices the LLM provider (Qwen) offers — the same
         // data-driven check as saving the agent voice, so the preview allow-list can't drift.
         var voice = request.Voice?.Trim();
-        var voiceRow = string.IsNullOrWhiteSpace(voice) ? null : await db.Voices
+        var voiceRow = string.IsNullOrWhiteSpace(voice) ? null : await db.AgentVoices
             .Include(v => v.Provider)
             .FirstOrDefaultAsync(v => v.IsActive && v.ApiName == voice && v.Provider.ProviderTypeId == 1);
         if (voiceRow is null)

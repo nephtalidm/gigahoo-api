@@ -24,12 +24,9 @@ public class JwtTokenService(IConfiguration config) : IJwtTokenService
             new(ClaimTypes.NameIdentifier, account.AccountId.ToString()),
             new("account_id", account.AccountId.ToString()),
             new(ClaimTypes.Email, account.Email ?? string.Empty),
-            new(ClaimTypes.MobilePhone, account.PhoneNumber ?? string.Empty),
             new("google_linked", account.GoogleSubjectId is not null ? "true" : "false"),
         };
 
-        if (account.DisplayName is not null)
-            claims.Add(new Claim(ClaimTypes.Name, account.DisplayName));
 
         var token = new JwtSecurityToken(
             issuer: config["Jwt:Issuer"],

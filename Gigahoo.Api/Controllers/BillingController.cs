@@ -153,7 +153,7 @@ public class BillingController(
         // Reserve-then-charge: secure the phone number BEFORE creating the Checkout
         // session so we never take payment for a number we can't deliver. The
         // assignment email/SMS are sent later (on the first paid invoice), not here.
-        if (string.IsNullOrEmpty(account.PhoneNumberSid))
+        if (account.AssignedPhoneNumberId is null)
         {
             var numberCountryCode = country?.Code ?? account.PhoneCountryCode ?? "US";
             try
@@ -176,12 +176,10 @@ public class BillingController(
                     return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
                 }
 
-                // Assign the number to the account so PhoneNumberSid is set, then
-                // point its voice webhook at the agent (same as the webhook handler).
+                // Assign the number to the account, then point its voice webhook at the
+                // agent (same as the webhook handler).
                 await twilio.AssignNumberToAccountAsync(phoneNumber, account.AccountId);
-                account.PhoneNumberSid = phoneNumber.Sid;
-                account.TelephonyProvider = telephony.ProviderName;
-                account.ForwardingPhone = phoneNumber.Number;
+                account.AssignedPhoneNumberId = phoneNumber.PhoneNumberId;
 
                 var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}";
                 await twilio.ConfigureWebhookAsync(phoneNumber.Sid, webhookUrl);

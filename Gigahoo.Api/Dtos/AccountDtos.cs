@@ -75,9 +75,6 @@ public record UpdateAccountRequest
     public string? WebsiteUrl { get; init; }
 
     [MaxLength(200)]
-    public string? ServiceArea { get; init; }
-
-    [MaxLength(200)]
     public string? BusinessHours { get; init; }
 
     [MaxLength(200)]
@@ -106,7 +103,6 @@ public record AccountResponse(
     string BusinessPhone,
     string PhoneCountryCode,
     string Email,
-    string? ServiceArea,
     string? WebsiteUrl,
     string? BusinessHours,
     string? ForwardingPhone,
@@ -139,8 +135,7 @@ public record AccountResponse(
     bool CollectPhone,
     bool CollectAddress,
     bool CollectEmergency,
-    string? AgentStyle,
-    string? AgentInstruct
+    string? AgentStyle
 );
 
 public record UpdateAccountLanguageRequest
@@ -153,8 +148,7 @@ public record VoiceSettingsResponse(
     string? Greeting,
     string? AgentVoice,
     int? MaximumCallMinutes,
-    string? AgentStyle,
-    string? AgentInstruct
+    string? AgentStyle
 );
 
 public record UpdateVoiceSettingsRequest
@@ -173,10 +167,6 @@ public record UpdateVoiceSettingsRequest
     // Voice emotion (CosyVoice native emotion value). NULL = neutral.
     [MaxLength(30)]
     public string? AgentStyle { get; init; }
-
-    // Optional instruct context key ("scenario:…"|"role:…"|"identity:…").
-    [MaxLength(60)]
-    public string? AgentInstruct { get; init; }
 }
 
 public record CallNotificationsResponse(

@@ -56,7 +56,7 @@ public class AccountController(
 
         // Check phone uniqueness
         var normalizedPhone = request.BusinessPhone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
-        var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhone == request.BusinessPhone && a.AccountId != accountId);
+        var phoneTaken = await db.Accounts.AnyAsync(a => a.BusinessPhoneNumber == request.BusinessPhone && a.AccountId != accountId);
         if (phoneTaken) return Conflict(new { error = "This phone number is already in use" });
 
         // US and Canada share the +1 country code, so the area code (first 3
@@ -81,7 +81,7 @@ public class AccountController(
 
         account.BusinessName = request.BusinessName;
         account.BusinessCategoryId = request.CategoryId;
-        account.BusinessPhone = request.BusinessPhone;
+        account.BusinessPhoneNumber = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
         account.NormalizedEmail = request.Email.ToLowerInvariant();
@@ -119,9 +119,10 @@ public class AccountController(
             account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
             var countryCode = account.CountryCodeId is short ccid && await db.Countries.FindAsync(ccid) is { } co
                 ? co.Code : account.PhoneCountryCode;
+            Entities.PhoneNumber? number = null;
             try
             {
-                var number = await twilio.GetAvailableNumberAsync(countryCode);
+                number = await twilio.GetAvailableNumberAsync(countryCode);
                 if (number is null)
                 {
                     var purchased = await twilio.PurchasePhoneNumberAsync(countryCode);
@@ -133,9 +134,7 @@ public class AccountController(
                 if (number is not null)
                 {
                     await twilio.AssignNumberToAccountAsync(number, account.AccountId);
-                    account.PhoneNumberSid = number.Sid;
-                    account.TelephonyProvider = telephony.ProviderName;
-                    account.ForwardingPhone = number.Number;
+                    account.AssignedPhoneNumberId = number.PhoneNumberId;
                     await twilio.ConfigureWebhookAsync(number.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}");
                 }
             }
@@ -144,7 +143,7 @@ public class AccountController(
                 logger.LogError(ex, "Free plan number provisioning failed for account {Account}", account.AccountId);
             }
 
-            if (string.IsNullOrEmpty(account.PhoneNumberSid))
+            if (account.AssignedPhoneNumberId is null)
             {
                 try
                 {
@@ -164,12 +163,12 @@ public class AccountController(
             // Number provisioned — persist the account + assignment, then welcome.
             await db.SaveChangesAsync();
 
-            try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, account.ForwardingPhone!); }
+            try { await email.SendPhoneNumberAssignedAsync(account.Email!, account.BusinessName, number!.Number); }
             catch (Exception ex) { logger.LogError(ex, "Free welcome email failed for account {Account}", account.AccountId); }
-            var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+            var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrEmpty(ownerPhone))
             {
-                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
+                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{number!.Number}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
                 catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.AccountId); }
             }
         }
@@ -226,12 +225,11 @@ public class AccountController(
 
         account.BusinessName = request.BusinessName;
         account.BusinessCategoryId = request.CategoryId;
-        account.BusinessPhone = request.BusinessPhone;
+        account.BusinessPhoneNumber = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
         account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.WebsiteUrl = request.WebsiteUrl;
-        account.ServiceArea = request.ServiceArea;
         account.BusinessHours = request.BusinessHours;
         account.AddressLine1 = request.AddressLine1;
         account.AddressLine2 = request.AddressLine2;
@@ -305,7 +303,6 @@ public class AccountController(
         if (inUse) return Conflict(new { error = "This Google account is already linked to another account" });
 
         account.GoogleSubjectId = payload.Subject;
-        account.DisplayName ??= payload.Name;
         account.IsEmailConfirmed = true;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -400,7 +397,7 @@ public class AccountController(
         var valid = await otp.VerifyAsync(request.NewPhone, "PhoneChange", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
-        account.BusinessPhone = request.NewPhone.Trim();
+        account.BusinessPhoneNumber = request.NewPhone.Trim();
         if (!string.IsNullOrEmpty(request.PhoneCountryCode))
             account.PhoneCountryCode = request.PhoneCountryCode;
         account.UpdatedAt = DateTime.UtcNow;
@@ -463,14 +460,16 @@ public class AccountController(
             return BadRequest(new { error = "Greeting must be 500 characters or fewer." });
 
         var agentVoice = string.IsNullOrWhiteSpace(request.AgentVoice) ? null : request.AgentVoice.Trim();
+        int? agentVoiceId = null;
         if (agentVoice is not null)
         {
             // Validate against the active voices the LLM provider (Qwen) actually offers,
             // so the allowed set stays data-driven and survives an LLM-provider swap.
-            var isValidVoice = await db.Voices.AnyAsync(v =>
+            var voiceRow = await db.AgentVoices.FirstOrDefaultAsync(v =>
                 v.IsActive && v.ApiName == agentVoice && v.Provider.ProviderTypeId == 1);
-            if (!isValidVoice)
+            if (voiceRow is null)
                 return BadRequest(new { error = "Unknown voice selection." });
+            agentVoiceId = voiceRow.AgentVoiceId;
         }
 
         // Per-call hard cap: NULL clears it (no limit); otherwise it must be within range.
@@ -484,23 +483,14 @@ public class AccountController(
         if (agentStyle is not null && !allowedStyles.Contains(agentStyle))
             return BadRequest(new { error = "Unknown voice style." });
 
-        // Optional "speaking context" preset — accept a Qwen-TTS creative preset or (legacy) a
-        // valid CosyVoice context for the selected voice; anything else is dropped.
-        var agentInstruct = string.IsNullOrWhiteSpace(request.AgentInstruct) ? null : request.AgentInstruct.Trim();
-        if (agentInstruct is not null &&
-            !Gigahoo.Api.Services.QwenInstructs.IsValid(agentInstruct) &&
-            !(agentVoice is not null && Gigahoo.Api.Services.InstructCatalog.IsValidContext(agentVoice, agentInstruct)))
-            agentInstruct = null;
-
         account.GreetingMessage = greeting;
-        account.AgentVoice = agentVoice;
+        account.AgentVoiceId = agentVoiceId;
         account.MaximumCallMinutes = maxCallMinutes;
         account.AgentStyle = agentStyle;
-        account.AgentInstruct = agentInstruct;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new VoiceSettingsResponse(account.GreetingMessage, account.AgentVoice, account.MaximumCallMinutes, account.AgentStyle, account.AgentInstruct));
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, agentVoice, account.MaximumCallMinutes, account.AgentStyle));
     }
 
     [HttpPut("language")]
@@ -537,18 +527,22 @@ public class AccountController(
             ? $"{account.BillingPeriodStart:MMM d} - {account.BillingPeriodEnd:MMM d}"
             : "";
 
+        var assignedNumber = account.AssignedPhoneNumberId is null ? null : await db.PhoneNumbers
+            .Where(p => p.PhoneNumberId == account.AssignedPhoneNumberId)
+            .Select(p => p.Number)
+            .FirstOrDefaultAsync();
+
         return new AccountResponse(
             account.AccountId,
             account.BusinessName ?? "",
             category?.Name ?? "",
             account.BusinessCategoryId ?? 0,
-            account.BusinessPhone ?? "",
+            account.BusinessPhoneNumber ?? "",
             account.PhoneCountryCode,
             account.Email,
-            account.ServiceArea,
             account.WebsiteUrl,
             account.BusinessHours,
-            account.ForwardingPhone,
+            assignedNumber,
             account.AddressLine1,
             account.AddressLine2,
             account.City,
@@ -570,7 +564,10 @@ public class AccountController(
             account.EmailCallNotifications,
             account.SmsCallNotifications,
             account.GreetingMessage,
-            account.AgentVoice,
+            account.AgentVoiceId is null ? null : await db.AgentVoices
+                .Where(v => v.AgentVoiceId == account.AgentVoiceId)
+                .Select(v => v.ApiName)
+                .FirstOrDefaultAsync(),
             account.MaximumCallMinutes,
             account.AccountLanguage ?? "",
             Gigahoo.Api.Services.TimeZoneResolver.ResolveIana(regionName),
@@ -578,8 +575,7 @@ public class AccountController(
             account.CollectPhone,
             account.CollectAddress,
             account.CollectEmergency,
-            account.AgentStyle,
-            account.AgentInstruct
+            account.AgentStyle
         );
     }
 }

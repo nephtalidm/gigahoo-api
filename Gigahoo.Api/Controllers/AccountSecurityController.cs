@@ -24,7 +24,7 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
         return Ok(new LinkedAccountsResponse(
             account.GoogleSubjectId != null,
             account.Email,
-            account.PhoneNumber
+            account.BusinessPhoneNumber
         ));
     }
 
@@ -57,7 +57,8 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
         if (account.GoogleSubjectId == null)
             return BadRequest(new { error = "No Google account linked" });
 
-        if (account.NormalizedPhone == null)
+        // The remaining login methods are password, magic-link email, or business-phone SMS.
+        if (account.PasswordHash == null && account.Email == null && account.BusinessPhoneNumber == null)
             return BadRequest(new { error = "Cannot unlink Google: no other login method available" });
 
         account.GoogleSubjectId = null;
@@ -88,27 +89,6 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
         return Ok(new { message = "Email changed successfully. Please verify your new email." });
     }
 
-    [HttpPost("change-phone")]
-    public async Task<IActionResult> ChangePhone([FromBody] ChangePhoneRequest request)
-    {
-        var accountId = GetAccountId();
-        var account = await db.Accounts.FindAsync(accountId);
-
-        if (account is null) return NotFound();
-
-        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedPhone == request.NewPhone && a.AccountId != accountId);
-        if (existing != null)
-            return BadRequest(new { error = "Phone number already in use" });
-
-        account.PhoneNumber = request.NewPhone;
-        account.NormalizedPhone = request.NewPhone;
-        account.IsPhoneConfirmed = false;
-        account.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-
-        return Ok(new { message = "Phone number changed successfully. Please verify your new phone number." });
-    }
-
     [HttpPost("set-primary")]
     public async Task<IActionResult> SetPrimaryLoginMethod([FromBody] SetPrimaryRequest request)
     {
@@ -129,5 +109,4 @@ public record LinkedAccountsResponse(
 
 public record LinkGoogleRequest(string GoogleSubjectId);
 public record ChangeEmailRequest(string NewEmail);
-public record ChangePhoneRequest(string NewPhone);
 public record SetPrimaryRequest(string Method);

@@ -20,7 +20,7 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
     public DbSet<PaymentCustomer> PaymentCustomers => Set<PaymentCustomer>();
     public DbSet<ProviderType> ProviderTypes => Set<ProviderType>();
     public DbSet<Provider> Providers => Set<Provider>();
-    public DbSet<Voice> Voices => Set<Voice>();
+    public DbSet<AgentVoice> AgentVoices => Set<AgentVoice>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<PhoneNumberStatus> PhoneNumberStatuses => Set<PhoneNumberStatus>();
@@ -88,11 +88,11 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.HasOne(x => x.ProviderType).WithMany(t => t.Providers).HasForeignKey(x => x.ProviderTypeId);
         });
 
-        // Voice (selectable AI-agent voices, owned by an LLM Provider)
-        modelBuilder.Entity<Voice>(e =>
+        // AgentVoice (selectable AI-agent voices, owned by an LLM Provider)
+        modelBuilder.Entity<AgentVoice>(e =>
         {
-            e.ToTable("Voice");
-            e.HasKey(x => x.VoiceId);
+            e.ToTable("AgentVoice");
+            e.HasKey(x => x.AgentVoiceId);
             e.Property(x => x.ApiName).HasMaxLength(64);
             e.Property(x => x.Label).HasMaxLength(128);
             e.Property(x => x.Gender).HasMaxLength(10);
@@ -175,12 +175,12 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             e.ToTable("Account", tb => tb.HasTrigger("TR_Account_UpdatedAt"));
             e.HasKey(x => x.AccountId);
             e.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("[NormalizedEmail] IS NOT NULL");
-            e.HasIndex(x => x.NormalizedPhone).IsUnique().HasFilter("[NormalizedPhone] IS NOT NULL");
             e.HasIndex(x => x.GoogleSubjectId).IsUnique().HasFilter("[GoogleSubjectId] IS NOT NULL");
             e.Property(x => x.NormalizedEmail).HasMaxLength(256);
-            e.Property(x => x.NormalizedPhone).HasMaxLength(50);
             e.HasOne(x => x.Plan).WithMany().HasForeignKey(x => x.PlanId).HasConstraintName("FK_Account_Plan").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.BusinessCategoryId).HasConstraintName("FK_Account_Category").OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.AgentVoice).WithMany().HasForeignKey(x => x.AgentVoiceId).HasConstraintName("FK_Account_AgentVoice").OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(x => x.AssignedPhoneNumber).WithMany().HasForeignKey(x => x.AssignedPhoneNumberId).HasConstraintName("FK_Account_AssignedPhoneNumber").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Region).WithMany().HasForeignKey(x => x.RegionId).HasConstraintName("FK_Account_Region").OnDelete(DeleteBehavior.NoAction);
             e.Property(a => a.CountryCodeId).HasColumnName("CountryId");
             e.HasIndex(x => x.StripeCustomerId).HasFilter("[StripeCustomerId] IS NOT NULL");

@@ -128,7 +128,7 @@ public class StripeWebhookController(
         // (BillingController), before payment. This is a fallback for the rare case
         // where the reservation didn't happen — provision now so the account isn't
         // left without a number after paying.
-        if (string.IsNullOrEmpty(account.PhoneNumberSid) && account.IsEmailConfirmed)
+        if (account.AssignedPhoneNumberId is null && account.IsEmailConfirmed)
         {
             try
             {
@@ -159,9 +159,7 @@ public class StripeWebhookController(
                     // Assign number to account
                     await twilio.AssignNumberToAccountAsync(phoneNumber, account.AccountId);
 
-                    account.PhoneNumberSid = phoneNumber.Sid;
-                    account.TelephonyProvider = telephony.ProviderName;
-                    account.ForwardingPhone = phoneNumber.Number;
+                    account.AssignedPhoneNumberId = phoneNumber.PhoneNumberId;
 
                     // Configure webhook to point to voice agent
                     var webhookUrl = $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}";
@@ -178,12 +176,16 @@ public class StripeWebhookController(
 
         // Notify the owner of their new number only on the FIRST invoice of the
         // subscription (subscription_create) — never on renewals (subscription_cycle).
-        if (invoice.BillingReason == "subscription_create" && !string.IsNullOrEmpty(account.ForwardingPhone))
+        var assignedNumber = account.AssignedPhoneNumberId is null ? null : await db.PhoneNumbers
+            .Where(p => p.PhoneNumberId == account.AssignedPhoneNumberId)
+            .Select(p => p.Number)
+            .FirstOrDefaultAsync();
+        if (invoice.BillingReason == "subscription_create" && !string.IsNullOrEmpty(assignedNumber))
         {
             // Email the customer their new phone number.
             try
             {
-                await email.SendPhoneNumberAssignedAsync(account.Email, account.BusinessName, account.ForwardingPhone);
+                await email.SendPhoneNumberAssignedAsync(account.Email, account.BusinessName, assignedNumber);
             }
             catch (Exception emailEx)
             {
@@ -191,12 +193,12 @@ public class StripeWebhookController(
             }
 
             // Also notify the owner by SMS.
-            var ownerPhone = account.PhoneNumber ?? account.BusinessPhone;
+            var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrWhiteSpace(ownerPhone))
             {
                 try
                 {
-                    await smsProvider.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{account.ForwardingPhone}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai");
+                    await smsProvider.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{assignedNumber}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai");
                 }
                 catch (Exception smsEx)
                 {
@@ -257,14 +259,12 @@ public class StripeWebhookController(
         if (account is null) return;
 
         // Release phone number back to pool (don't delete from Twilio)
-        if (!string.IsNullOrEmpty(account.PhoneNumberSid))
+        if (account.AssignedPhoneNumberId is not null)
         {
             try
             {
                 await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
-                account.PhoneNumberSid = null;
-                account.TelephonyProvider = null;
-                account.ForwardingPhone = null;
+                account.AssignedPhoneNumberId = null;
                 logger.LogInformation("Released phone number back to pool for account {Account}", account.AccountId);
             }
             catch (Exception ex)
