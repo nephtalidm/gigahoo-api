@@ -131,14 +131,13 @@ public class BillingController(
         // Billing currency is fully data-driven: read it from the Country table
         // (no hardcoded country->currency mapping or default currency in code).
         var country = account.CountryCodeId is short cid ? await db.Countries.FindAsync(cid) : null;
-        country ??= await db.Countries.FirstOrDefaultAsync(c => c.Code == account.PhoneCountryCode);
         var currency = country?.Currency?.Trim().ToUpperInvariant();
         if (string.IsNullOrEmpty(currency))
             return BadRequest(new { error = "Could not determine a billing currency for this account's country" });
 
         // Defense-in-depth: Gigahoo only serves countries flagged IsSupported in the
         // Country table. Validate the resolved billing country against that flag.
-        var billingCountryCode = (country?.Code ?? account.PhoneCountryCode)?.Trim();
+        var billingCountryCode = country?.Code?.Trim();
         var billingCountrySupported = await db.Countries.AnyAsync(c => c.Code == billingCountryCode && c.IsSupported);
         if (!billingCountrySupported)
             return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
@@ -155,7 +154,7 @@ public class BillingController(
         // assignment email/SMS are sent later (on the first paid invoice), not here.
         if (account.AssignedPhoneNumberId is null)
         {
-            var numberCountryCode = country?.Code ?? account.PhoneCountryCode ?? "US";
+            var numberCountryCode = country?.Code ?? "US";
             try
             {
                 // Pool-first, then purchase a fresh number if the pool is empty.

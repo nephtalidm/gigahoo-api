@@ -56,7 +56,7 @@ public class AccountController(
         // digits) is the only thing that distinguishes them. Reject a phone whose
         // NANP area code doesn't belong to the selected phone country. This is the
         // authoritative gate — it rejects even if the frontend check is bypassed.
-        if (!NanpAreaCodes.MatchesCountry(request.BusinessPhone, request.PhoneCountryCode))
+        if (!NanpAreaCodes.MatchesCountry(request.BusinessPhone, request.CountryCode))
             return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
 
         // Password is required only for plain-email signups. SMS and Google are
@@ -75,7 +75,6 @@ public class AccountController(
         account.BusinessName = request.BusinessName;
         account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhoneNumber = request.BusinessPhone;
-        account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
         account.PlanId = request.PlanId;
         account.AddressLine1 = request.AddressLine1;
@@ -112,7 +111,7 @@ public class AccountController(
             account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
             account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
             var countryCode = account.CountryCodeId is short ccid && await db.Countries.FindAsync(ccid) is { } co
-                ? co.Code : account.PhoneCountryCode;
+                ? co.Code : "US";
             Entities.PhoneNumber? number = null;
             try
             {
@@ -220,7 +219,6 @@ public class AccountController(
         account.BusinessName = request.BusinessName;
         account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhoneNumber = request.BusinessPhone;
-        account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
         account.WebsiteUrl = request.WebsiteUrl;
         account.BusinessHours = request.BusinessHours;
@@ -363,8 +361,9 @@ public class AccountController(
             return BadRequest(new { error = "Enter a valid phone number" });
 
         // US/CA share +1; only the NANP area code distinguishes them. Reject a new
-        // phone whose area code doesn't match the account's stored phone country.
-        if (!NanpAreaCodes.MatchesCountry(newPhone, account.PhoneCountryCode))
+        // phone whose area code doesn't match the account's address country.
+        var phoneCountry = account.CountryCodeId is short pcc && await db.Countries.FindAsync(pcc) is { } pco ? pco.Code : "US";
+        if (!NanpAreaCodes.MatchesCountry(newPhone, phoneCountry))
             return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
 
         var code = await otp.GenerateAndStoreAsync(newPhone, "PhoneChange", TimeSpan.FromMinutes(10));
@@ -382,16 +381,15 @@ public class AccountController(
         if (account is null) return NotFound();
 
         // Authoritative area-code gate: re-check before applying the change, using
-        // the account's stored phone country (US/CA disambiguation under +1).
-        if (!NanpAreaCodes.MatchesCountry(request.NewPhone, account.PhoneCountryCode))
+        // the account's address country (US/CA disambiguation under +1).
+        var confirmPhoneCountry = account.CountryCodeId is short cpc && await db.Countries.FindAsync(cpc) is { } cpo ? cpo.Code : "US";
+        if (!NanpAreaCodes.MatchesCountry(request.NewPhone, confirmPhoneCountry))
             return BadRequest(new { error = "This phone number's area code doesn't match the selected country." });
 
         var valid = await otp.VerifyAsync(request.NewPhone, "PhoneChange", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         account.BusinessPhoneNumber = request.NewPhone.Trim();
-        if (!string.IsNullOrEmpty(request.PhoneCountryCode))
-            account.PhoneCountryCode = request.PhoneCountryCode;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
@@ -527,7 +525,6 @@ public class AccountController(
             category?.Name ?? "",
             account.BusinessCategoryId ?? 0,
             account.BusinessPhoneNumber ?? "",
-            account.PhoneCountryCode,
             account.Email,
             account.WebsiteUrl,
             account.BusinessHours,

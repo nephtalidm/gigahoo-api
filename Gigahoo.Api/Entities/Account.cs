@@ -16,7 +16,6 @@ public class Account
     public string? BusinessName { get; set; }
     public byte? BusinessCategoryId { get; set; }
     public string? BusinessPhoneNumber { get; set; }
-    public string PhoneCountryCode { get; set; } = "US";
     public string? WebsiteUrl { get; set; }
     public string? BusinessHours { get; set; }
     // Preferred dashboard/website language (FK -> Language; matched by Language.Code).

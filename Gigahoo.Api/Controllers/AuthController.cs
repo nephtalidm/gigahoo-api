@@ -245,17 +245,11 @@ public class AuthController(
     // E.164 digits, so the same local number in two countries can never collide.
     private async Task<Account?> FindAccountByPhoneAsync(string phoneNumber)
     {
+        // BusinessPhoneNumber is stored as full E.164, so the comparison is plain digits.
         var incomingDigits = new string(phoneNumber.Where(char.IsDigit).ToArray());
         if (incomingDigits.Length < 8) return null;
-        var dialByCountry = await db.Countries
-            .ToDictionaryAsync(c => c.Code, c => new string(c.DialCode.Where(char.IsDigit).ToArray()));
         var candidates = await db.Accounts.Where(a => a.BusinessPhoneNumber != null).ToListAsync();
         return candidates.FirstOrDefault(a =>
-        {
-            var bizDigits = new string(a.BusinessPhoneNumber!.Where(char.IsDigit).ToArray());
-            var dial = dialByCountry.TryGetValue(a.PhoneCountryCode, out var d) ? d : "";
-            // The business phone may be stored with or without the country code.
-            return incomingDigits == dial + bizDigits || incomingDigits == bizDigits;
-        });
+            new string(a.BusinessPhoneNumber!.Where(char.IsDigit).ToArray()) == incomingDigits);
     }
 }

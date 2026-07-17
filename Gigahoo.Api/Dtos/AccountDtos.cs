@@ -10,11 +10,9 @@ public record CreateAccountRequest
     [Required]
     public byte CategoryId { get; init; }
 
+    // Full E.164 business number ("+17783923021") — the ONE phone identity of the account.
     [Required, MaxLength(30)]
     public string BusinessPhone { get; init; } = default!;
-
-    [Required, MaxLength(5)]
-    public string PhoneCountryCode { get; init; } = default!;
 
     [Required, EmailAddress, MaxLength(254)]
     public string Email { get; init; } = default!;
@@ -65,9 +63,6 @@ public record UpdateAccountRequest
     [Required, MaxLength(30)]
     public string BusinessPhone { get; init; } = default!;
 
-    [Required, MaxLength(5)]
-    public string PhoneCountryCode { get; init; } = default!;
-
     [Required, EmailAddress, MaxLength(254)]
     public string Email { get; init; } = default!;
 
@@ -101,7 +96,6 @@ public record AccountResponse(
     string Category,
     byte CategoryId,
     string BusinessPhone,
-    string PhoneCountryCode,
     string Email,
     string? WebsiteUrl,
     string? BusinessHours,
@@ -216,9 +210,6 @@ public record ConfirmPhoneChangeRequest
 {
     [Required, MaxLength(30)]
     public string NewPhone { get; init; } = default!;
-
-    [MaxLength(5)]
-    public string? PhoneCountryCode { get; init; }
 
     [Required, MaxLength(10)]
     public string Code { get; init; } = default!;
