@@ -94,7 +94,6 @@ public class VoiceAgentController(
             account.CollectPhone,
             account.CollectAddress,
             account.CollectEmergency,
-            account.AgentStyle,
             account.AccountLanguage
         ));
     }
@@ -241,7 +240,6 @@ public record VoiceAgentAccountResponse(
     bool CollectPhone,
     bool CollectAddress,
     bool CollectEmergency,
-    string? AgentStyle,
     string? AccountLanguage
 );
 

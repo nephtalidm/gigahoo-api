@@ -134,8 +134,7 @@ public record AccountResponse(
     bool CollectName,
     bool CollectPhone,
     bool CollectAddress,
-    bool CollectEmergency,
-    string? AgentStyle
+    bool CollectEmergency
 );
 
 public record UpdateAccountLanguageRequest
@@ -147,8 +146,7 @@ public record UpdateAccountLanguageRequest
 public record VoiceSettingsResponse(
     string? Greeting,
     string? AgentVoice,
-    int? MaximumCallMinutes,
-    string? AgentStyle
+    int? MaximumCallMinutes
 );
 
 public record UpdateVoiceSettingsRequest
@@ -164,9 +162,6 @@ public record UpdateVoiceSettingsRequest
     [Range(1, 120)]
     public int? MaximumCallMinutes { get; init; }
 
-    // Voice emotion (CosyVoice native emotion value). NULL = neutral.
-    [MaxLength(30)]
-    public string? AgentStyle { get; init; }
 }
 
 public record CallNotificationsResponse(

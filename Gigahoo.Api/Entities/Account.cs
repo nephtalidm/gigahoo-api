@@ -56,8 +56,6 @@ public class Account
     public string? GreetingMessage { get; set; }
     public int? AgentVoiceId { get; set; }      // FK -> AgentVoice
     public AgentVoice? AgentVoice { get; set; }
-    // Voice emotion (CosyVoice native emotion value: neutral|happy|sad|angry|fearful|surprised|disgusted).
-    public string? AgentStyle { get; set; }
 
     // Per-call hard cap (kill switch): the longest a single call may run before the voice agent
     // forcibly ends it, no matter how productive the call is. Minutes. Defaults to 10;
