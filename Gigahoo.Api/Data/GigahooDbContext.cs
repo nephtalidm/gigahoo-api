@@ -174,9 +174,9 @@ public class GigahooDbContext(DbContextOptions<GigahooDbContext> options) : DbCo
             // so EF must not use the SQL OUTPUT clause for inserts/updates.
             e.ToTable("Account", tb => tb.HasTrigger("TR_Account_UpdatedAt"));
             e.HasKey(x => x.AccountId);
-            e.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("[NormalizedEmail] IS NOT NULL");
+            e.HasIndex(x => x.Email).IsUnique().HasFilter("[Email] IS NOT NULL");
             e.HasIndex(x => x.GoogleSubjectId).IsUnique().HasFilter("[GoogleSubjectId] IS NOT NULL");
-            e.Property(x => x.NormalizedEmail).HasMaxLength(256);
+            e.Property(x => x.Email).HasMaxLength(256);
             e.HasOne(x => x.Plan).WithMany().HasForeignKey(x => x.PlanId).HasConstraintName("FK_Account_Plan").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.BusinessCategoryId).HasConstraintName("FK_Account_Category").OnDelete(DeleteBehavior.NoAction);
             e.HasOne(x => x.AgentVoice).WithMany().HasForeignKey(x => x.AgentVoiceId).HasConstraintName("FK_Account_AgentVoice").OnDelete(DeleteBehavior.NoAction);

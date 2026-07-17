@@ -36,7 +36,7 @@ public class AuthController(
             // Only auto-link when Google has verified the address — linking on an
             // unverified email would be an account-takeover risk.
             if (payload.EmailVerified)
-                account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == payload.Email.ToLowerInvariant());
+                account = await db.Accounts.FirstOrDefaultAsync(a => a.Email == payload.Email);
 
             if (account is not null)
             {
@@ -59,7 +59,6 @@ public class AuthController(
                 account = new Account
                 {
                     Email = payload.Email,
-                    NormalizedEmail = payload.Email.ToLowerInvariant(),
                     GoogleSubjectId = payload.Subject,
                     IsEmailConfirmed = payload.EmailVerified,
                     CreatedAt = DateTime.UtcNow,
@@ -86,7 +85,7 @@ public class AuthController(
     public async Task<IActionResult> SendMagicLink([FromBody] SendMagicLinkRequest request)
     {
         // Existing account => sign-in copy; otherwise sign-up copy.
-        var exists = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        var exists = await db.Accounts.AnyAsync(a => a.Email == request.Email);
 
         // Block NEW-account signups from non-supported / coming-soon markets. Existing
         // accounts (login) always proceed.
@@ -114,7 +113,7 @@ public class AuthController(
     [HttpPost("check-email")]
     public async Task<ActionResult> CheckEmail([FromBody] SendMagicLinkRequest request)
     {
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Email == request.Email);
         if (account is null)
             return Ok(new { exists = false });
         return Ok(new { exists = true, hasPassword = !string.IsNullOrEmpty(account.PasswordHash) });
@@ -123,7 +122,7 @@ public class AuthController(
     [HttpPost("login-password")]
     public async Task<ActionResult<AuthResponse>> LoginPassword([FromBody] LoginPasswordRequest request)
     {
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Email == request.Email);
         if (account is null || string.IsNullOrEmpty(account.PasswordHash))
             return Unauthorized(new { error = "Invalid email or password" });
 
@@ -145,7 +144,7 @@ public class AuthController(
         var valid = await otp.VerifyAsync(request.Email, "EmailMagicLink", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired link" });
 
-        var account = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant());
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.Email == request.Email);
 
         // A valid magic link proves the user owns this email, so an existing
         // account (created via email, Google, or otherwise) is simply logged in —
@@ -157,7 +156,6 @@ public class AuthController(
             account = new Account
             {
                 Email = request.Email,
-                NormalizedEmail = request.Email.ToLowerInvariant(),
                 IsEmailConfirmed = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,

@@ -6,7 +6,6 @@ public class Account
 
     // Auth identity (merged from User)
     public string? Email { get; set; }
-    public string? NormalizedEmail { get; set; }
     public string? GoogleSubjectId { get; set; }
     public string? PasswordHash { get; set; }
     public bool IsEmailConfirmed { get; set; }

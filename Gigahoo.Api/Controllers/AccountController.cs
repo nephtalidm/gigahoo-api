@@ -48,9 +48,9 @@ public class AccountController(
         if (account is null) return NotFound();
 
         // Check email uniqueness (only if email changed)
-        if (account.NormalizedEmail != request.Email.ToLowerInvariant())
+        if (!string.Equals(account.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
-            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.AccountId != accountId);
+            var emailTaken = await db.Accounts.AnyAsync(a => a.Email == request.Email && a.AccountId != accountId);
             if (emailTaken) return Conflict(new { error = "This email is already registered" });
         }
 
@@ -84,7 +84,6 @@ public class AccountController(
         account.BusinessPhoneNumber = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
-        account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.PlanId = request.PlanId;
         account.AddressLine1 = request.AddressLine1;
         account.AddressLine2 = request.AddressLine2;
@@ -217,9 +216,9 @@ public class AccountController(
         if (account is null) return NotFound();
 
         // Enforce email uniqueness across all accounts (any signup method).
-        if (account.NormalizedEmail != request.Email.ToLowerInvariant())
+        if (!string.Equals(account.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
-            var emailTaken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == request.Email.ToLowerInvariant() && a.AccountId != accountId);
+            var emailTaken = await db.Accounts.AnyAsync(a => a.Email == request.Email && a.AccountId != accountId);
             if (emailTaken) return Conflict(new { error = "This email is already registered" });
         }
 
@@ -228,7 +227,6 @@ public class AccountController(
         account.BusinessPhoneNumber = request.BusinessPhone;
         account.PhoneCountryCode = request.PhoneCountryCode;
         account.Email = request.Email;
-        account.NormalizedEmail = request.Email.ToLowerInvariant();
         account.WebsiteUrl = request.WebsiteUrl;
         account.BusinessHours = request.BusinessHours;
         account.AddressLine1 = request.AddressLine1;
@@ -322,10 +320,10 @@ public class AccountController(
             return BadRequest(new { error = "Enter a valid email address" });
 
         var normalized = newEmail.ToLowerInvariant();
-        if (normalized == account.NormalizedEmail)
+        if (string.Equals(normalized, account.Email, StringComparison.OrdinalIgnoreCase))
             return BadRequest(new { error = "This is already your email address" });
 
-        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.AccountId != accountId);
+        var taken = await db.Accounts.AnyAsync(a => a.Email == normalized && a.AccountId != accountId);
         if (taken) return Conflict(new { error = "This email is already registered" });
 
         var code = await otp.GenerateAndStoreAsync(newEmail, "EmailChange", TimeSpan.FromMinutes(15));
@@ -344,14 +342,13 @@ public class AccountController(
 
         var newEmail = request.NewEmail.Trim();
         var normalized = newEmail.ToLowerInvariant();
-        var taken = await db.Accounts.AnyAsync(a => a.NormalizedEmail == normalized && a.AccountId != accountId);
+        var taken = await db.Accounts.AnyAsync(a => a.Email == normalized && a.AccountId != accountId);
         if (taken) return Conflict(new { error = "This email is already registered" });
 
         var valid = await otp.VerifyAsync(newEmail, "EmailChange", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
         account.Email = newEmail;
-        account.NormalizedEmail = normalized;
         account.IsEmailConfirmed = true;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();

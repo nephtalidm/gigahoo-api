@@ -76,12 +76,11 @@ public class AccountSecurityController(GigahooDbContext db) : ControllerBase
 
         if (account is null) return NotFound();
 
-        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.NormalizedEmail == request.NewEmail.ToLowerInvariant() && a.AccountId != accountId);
+        var existing = await db.Accounts.FirstOrDefaultAsync(a => a.Email == request.NewEmail && a.AccountId != accountId);
         if (existing != null)
             return BadRequest(new { error = "Email already in use" });
 
         account.Email = request.NewEmail;
-        account.NormalizedEmail = request.NewEmail.ToLowerInvariant();
         account.IsEmailConfirmed = false;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
