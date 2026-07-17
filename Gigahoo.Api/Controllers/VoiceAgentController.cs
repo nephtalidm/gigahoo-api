@@ -124,6 +124,24 @@ public class VoiceAgentController(
     }
 
     /// <summary>
+    /// PER-NUMBER ROUTING: resolve the account that OWNS the dialed number (E.164) and
+    /// return its config. The PhoneNumber pool's AssignedAccountId is the single source of
+    /// truth — no env-pinned default account.
+    /// </summary>
+    [HttpGet("account/by-number/{number}")]
+    public async Task<ActionResult<VoiceAgentAccountResponse>> GetAccountConfigByNumber(string number)
+    {
+        var digits = new string(number.Where(char.IsDigit).ToArray());
+        if (digits.Length < 7) return NotFound(new { error = "Invalid number" });
+        var accountId = await db.PhoneNumbers
+            .Where(p => p.AssignedAccountId != null && p.Number.Replace("+", "") == digits)
+            .Select(p => p.AssignedAccountId)
+            .FirstOrDefaultAsync();
+        if (accountId is null) return NotFound(new { error = "No account owns this number" });
+        return await GetAccountConfig(accountId.Value);
+    }
+
+    /// <summary>
     /// Create a conversation record after a call ends (used by voice agent)
     /// </summary>
     [HttpPost("conversations/{accountId:guid}")]
