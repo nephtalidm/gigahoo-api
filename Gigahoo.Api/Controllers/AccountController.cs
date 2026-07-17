@@ -397,6 +397,57 @@ public class AccountController(
         return Ok(new { message = "Phone updated" });
     }
 
+    /// <summary>
+    /// DANGER ZONE: permanently delete the account and everything it owns, in dependency
+    /// order (the FKs are NO_ACTION, so children go first): release the phone number back
+    /// to the pool, cancel any live subscription (best-effort), then conversations,
+    /// invoices, payment customers, and finally the account row itself.
+    /// </summary>
+    [HttpDelete]
+    public async Task<IActionResult> Delete()
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (account is null) return NotFound();
+
+        // 1. Release the assigned number (provider-side webhook cleanup is best-effort;
+        //    the pool rows are detached unconditionally so no orphaned assignment remains).
+        if (account.AssignedPhoneNumberId is not null)
+        {
+            try { await twilio.ReleaseNumberFromAccountAsync(account.AccountId); }
+            catch (Exception ex) { logger.LogError(ex, "Number release failed while deleting account {Account}", accountId); }
+            account.AssignedPhoneNumberId = null;
+            await db.SaveChangesAsync();
+        }
+        await db.PhoneNumbers
+            .Where(p => p.AssignedAccountId == accountId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.AssignedAccountId, (Guid?)null)
+                .SetProperty(p => p.PhoneNumberStatusId, (byte)Entities.PhoneNumberStatusId.Available)
+                .SetProperty(p => p.AssignedAt, (DateTime?)null));
+
+        // 2. Cancel the subscription so Stripe stops billing (best-effort).
+        if (!string.IsNullOrEmpty(account.StripeSubscriptionId))
+        {
+            try
+            {
+                Stripe.StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+                await new Stripe.SubscriptionService().CancelAsync(account.StripeSubscriptionId);
+            }
+            catch (Exception ex) { logger.LogError(ex, "Subscription cancel failed while deleting account {Account}", accountId); }
+        }
+
+        // 3. Children first, then the account.
+        await db.Conversations.Where(c => c.AccountId == accountId).ExecuteDeleteAsync();
+        await db.Invoices.Where(i => i.AccountId == accountId).ExecuteDeleteAsync();
+        await db.PaymentCustomers.Where(pc => pc.AccountId == accountId).ExecuteDeleteAsync();
+        db.Accounts.Remove(account);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Account {Account} permanently deleted by its owner", accountId);
+        return NoContent();
+    }
+
     [HttpGet("notifications")]
     public async Task<ActionResult<CallNotificationsResponse>> GetNotifications()
     {
