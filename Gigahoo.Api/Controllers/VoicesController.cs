@@ -31,13 +31,14 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
                 v.IsDefault,
                 v.Gender,
                 Language = v.Language != null ? v.Language.Name : null,
+                LanguageCode = v.Language != null ? v.Language.Code : null,
             })
             .ToListAsync();
 
         // Emotion is handled adaptively by the agent (voice tags in the reply text), so no
         // per-voice instruct options are attached.
         var voices = rows
-            .Select(v => new VoiceResponse(v.ReferenceId, v.Label, v.IsDefault, v.Gender, v.Language, Array.Empty<InstructOption>()))
+            .Select(v => new VoiceResponse(v.ReferenceId, v.Label, v.IsDefault, v.Gender, v.Language, v.LanguageCode, Array.Empty<InstructOption>()))
             .ToList();
 
         return Ok(voices);
@@ -68,7 +69,7 @@ public class VoicesController(GigahooDbContext db) : ControllerBase
     }
 }
 
-public record VoiceResponse(string ApiName, string Label, bool IsDefault, string? Gender, string? Language, IReadOnlyList<InstructOption> Options);
+public record VoiceResponse(string ApiName, string Label, bool IsDefault, string? Gender, string? Language, string? LanguageCode, IReadOnlyList<InstructOption> Options);
 public record LabVoice(string ApiName, string Label);
 public record LabResponse(
     IReadOnlyList<LabVoice> Cosyvoice,
