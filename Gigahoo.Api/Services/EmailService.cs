@@ -11,7 +11,7 @@ public interface IEmailService
     Task SendMagicLinkAsync(string toEmail, string magicLink, VerificationPurpose purpose = VerificationPurpose.SignIn);
     Task SendEmailChangeCodeAsync(string toEmail, string code);
     Task SendAccountDeletionCodeAsync(string toEmail, string code);
-    Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? pdfUrl);
+    Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, string? pdfUrl);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
@@ -137,13 +137,14 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
-    public async Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? pdfUrl)
+    public async Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, string? pdfUrl)
     {
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
         message.Subject = $"Payment received — {currency} {amount:0.00}";
 
+        description ??= "Subscription payment";
         var pdfButton = string.IsNullOrEmpty(pdfUrl)
             ? ""
             : $"""
@@ -170,6 +171,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                 </p>
                                 <div style="background:#f3f4f6;border-radius:8px;padding:20px;margin:0 0 16px;text-align:center;">
                                     <p style="margin:0;font-size:28px;font-weight:700;color:#111827;">{{currency}} {{amount:0.00}}</p>
+                                    <p style="margin:6px 0 0;font-size:15px;color:#374151;">{{description}}</p>
                                     <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Invoice {{invoiceNumber}}</p>
                                 </div>
             {{pdfButton}}

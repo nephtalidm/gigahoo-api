@@ -229,10 +229,26 @@ public class StripeWebhookController(
         {
             try
             {
+                // What was paid: resolve the invoice line's price to OUR plan name (same
+                // PlanPrice mapping as everywhere else); Stripe's line description backstops.
+                var receiptLine = invoice.Lines?.Data?.FirstOrDefault();
+                var receiptPriceId = receiptLine?.Pricing?.PriceDetails?.Price?.Id;
+                string? paidFor = null;
+                if (receiptPriceId is not null)
+                {
+                    var paidPlanId = await db.PlanPrices
+                        .Where(pp => pp.ProviderPriceId == receiptPriceId)
+                        .Select(pp => (byte?)pp.PlanId)
+                        .FirstOrDefaultAsync();
+                    if (paidPlanId is byte ppid && await db.Plans.FindAsync(ppid) is { } paidPlan)
+                        paidFor = $"Gigahoo {paidPlan.Name} plan — monthly subscription";
+                }
+                paidFor ??= receiptLine?.Description;
+
                 await email.SendPaymentReceiptAsync(
                     account.Email, account.BusinessName,
                     invoice.AmountPaid / 100m, invoice.Currency?.ToUpper() ?? "USD",
-                    invoice.Number ?? invoice.Id, invoice.InvoicePdf);
+                    invoice.Number ?? invoice.Id, paidFor, invoice.InvoicePdf);
             }
             catch (Exception ex) { logger.LogError(ex, "Payment receipt email failed for account {Account}", account.AccountId); }
         }
