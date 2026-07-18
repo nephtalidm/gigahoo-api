@@ -72,6 +72,9 @@ public class AccountController(
             account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         }
 
+        // Captured BEFORE the mutation below overwrites it: the number this identity proved
+        // by SMS login (null when the signup method wasn't SMS).
+        var authProvenPhone = account.IsPhoneConfirmed ? account.BusinessPhoneNumber : null;
         account.BusinessName = request.BusinessName.Trim();
         account.BusinessCategoryId = request.CategoryId;
         account.BusinessPhoneNumber = request.BusinessPhone;
@@ -100,6 +103,19 @@ public class AccountController(
         account.UpdatedAt = DateTime.UtcNow;
         // NOTE: deliberately NOT saving the account yet. For free signups we persist
         // the account only once a phone number has actually been provisioned.
+
+        // HARD GATE: no account is created without SMS-verified control of the business
+        // phone. SMS-auth signups proved their exact login number already; everyone else must
+        // echo the code sent by phone/request-verify (keyed to this identity + this number).
+        // Verified LAST, after every other validation, so a failed field never burns the code.
+        var phoneAlreadyProven = authProvenPhone is not null && authProvenPhone == request.BusinessPhone;
+        if (!phoneAlreadyProven)
+        {
+            var codeOk = !string.IsNullOrEmpty(request.PhoneVerificationCode)
+                && await otp.VerifyAsync($"{accountId}:{request.BusinessPhone}", "SignupPhoneVerify", request.PhoneVerificationCode);
+            if (!codeOk)
+                return BadRequest(new { error = "phone_verification_required" });
+        }
 
         var plan = await db.Plans.FindAsync(account.PlanId);
 
@@ -354,6 +370,38 @@ public class AccountController(
         await db.SaveChangesAsync();
 
         return Ok(new { message = "Email updated" });
+    }
+
+    /// <summary>
+    /// SIGNUP gate step 1: send the SMS code that account creation requires — no profile is
+    /// created without proving control of the business phone. Keyed to this auth identity AND
+    /// the exact number, so a code requested for one phone can never verify another. SMS-auth
+    /// signups already proved their login number; for them (same number) this returns
+    /// verified=true and no code is needed.
+    /// </summary>
+    [HttpPost("phone/request-verify")]
+    public async Task<IActionResult> RequestPhoneVerification([FromBody] RequestPhoneChangeRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstOrDefaultAsync(a => a.AccountId == accountId);
+        if (account is null) return NotFound();
+
+        var phone = request.NewPhone.Trim();
+        if (string.IsNullOrEmpty(phone))
+            return BadRequest(new { error = "Enter a valid phone number" });
+
+        if (account.IsPhoneConfirmed && account.BusinessPhoneNumber == phone)
+            return Ok(new { verified = true });
+
+        var key = $"{accountId}:{phone}";
+        var wait = await otp.SecondsUntilResendAsync(key, "SignupPhoneVerify", TimeSpan.FromMinutes(1));
+        if (wait > 0)
+            return StatusCode(429, new { error = $"Please wait {wait} seconds before requesting another code." });
+
+        var code = await otp.GenerateAndStoreAsync(key, "SignupPhoneVerify", TimeSpan.FromMinutes(10));
+        await sms.SendAsync(phone, $"Your Gigahoo verification code is {code}");
+        logger.LogInformation("Signup phone-verification code sent for account {Account}", accountId);
+        return Ok(new { verified = false, message = "Verification code sent." });
     }
 
     [HttpPost("phone/request-change")]

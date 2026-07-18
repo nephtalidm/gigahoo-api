@@ -20,6 +20,12 @@ public record CreateAccountRequest
     [Required]
     public byte PlanId { get; init; }
 
+    // SMS code proving control of BusinessPhone (see phone/request-verify). Optional in the
+    // DTO because SMS-auth signups already proved their number; the controller enforces it
+    // for everyone else.
+    [MaxLength(10)]
+    public string? PhoneVerificationCode { get; init; }
+
     [Required, MaxLength(200)]
     public string AddressLine1 { get; init; } = default!;
 
