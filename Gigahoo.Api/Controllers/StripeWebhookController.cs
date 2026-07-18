@@ -223,6 +223,20 @@ public class StripeWebhookController(
         }
 
         await db.SaveChangesAsync();
+        // RECEIPT: transactional (not opt-out) — every successful charge emails a branded
+        // receipt with the direct PDF, standard practice for paid SaaS.
+        if (!string.IsNullOrWhiteSpace(account.Email) && invoice.AmountPaid > 0)
+        {
+            try
+            {
+                await email.SendPaymentReceiptAsync(
+                    account.Email, account.BusinessName,
+                    invoice.AmountPaid / 100m, invoice.Currency?.ToUpper() ?? "USD",
+                    invoice.Number ?? invoice.Id, invoice.InvoicePdf);
+            }
+            catch (Exception ex) { logger.LogError(ex, "Payment receipt email failed for account {Account}", account.AccountId); }
+        }
+
         logger.LogInformation("Invoice {Id} recorded for account {Account}", invoice.Id, account.AccountId);
     }
 
