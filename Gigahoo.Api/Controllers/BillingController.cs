@@ -270,14 +270,28 @@ public class BillingController(
             }
         }
 
-        // Existing subscription: re-price it in place (prorated) with the card already on file.
+        // Existing subscription: re-priceable ONLY if it is actually in good standing. An
+        // INCOMPLETE one (abandoned card entry at signup) has never been paid — re-pricing it
+        // and flipping the plan would grant a paid plan with no payment. Anything not paid-up
+        // is cancelled and a fresh subscription (which collects payment) is created below.
         if (!string.IsNullOrEmpty(account.StripeSubscriptionId))
         {
-            await stripe.ChangeSubscriptionPriceAsync(account.StripeSubscriptionId, priceId);
-            account.PlanId = plan.PlanId;
-            account.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
-            return Ok(new { status = "active" });
+            Stripe.Subscription? existing = null;
+            try { existing = await stripe.GetSubscriptionAsync(account.StripeSubscriptionId); }
+            catch (Exception ex) { logger.LogWarning(ex, "Stored subscription {Sub} unreadable — recreating", account.StripeSubscriptionId); }
+
+            if (existing is { Status: "active" or "trialing" or "past_due" })
+            {
+                await stripe.ChangeSubscriptionPriceAsync(account.StripeSubscriptionId, priceId);
+                account.PlanId = plan.PlanId;
+                account.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                return Ok(new { status = "active" });
+            }
+
+            try { await stripe.CancelSubscriptionAsync(account.StripeSubscriptionId); }
+            catch { /* already expired/canceled */ }
+            account.StripeSubscriptionId = null;
         }
 
         // New subscription: charge the saved default card directly if there is one.
