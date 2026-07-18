@@ -126,7 +126,9 @@ public class StripeWebhookController(
             Amount = invoice.AmountPaid / 100m,
             Currency = invoice.Currency?.ToUpper() ?? "USD",
             InvoiceStatusId = (byte)Entities.InvoiceStatusId.Paid,
-            PdfUrl = invoice.HostedInvoiceUrl,
+            // InvoicePdf is the direct-download PDF; HostedInvoiceUrl is Stripe's web page —
+            // the dashboard's download icon must actually download.
+            PdfUrl = invoice.InvoicePdf,
             CreatedAt = DateTime.UtcNow,
         });
 
