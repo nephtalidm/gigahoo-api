@@ -148,7 +148,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             ? ""
             : $"""
                                 <div style="text-align:center; margin: 0 0 16px;">
-                                    <a href="{pdfUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 8px;">Download invoice (PDF)</a>
+                                    <a href="{pdfUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 40px; border-radius: 10px;">Download invoice (PDF)</a>
                                 </div>
               """;
 
