@@ -142,7 +142,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = $"Payment received — {currency} {amount:0.00}";
+        message.Subject = $"Gigahoo — payment received ({currency} {amount:0.00})";
 
         description ??= "Subscription payment";
         var pdfButton = string.IsNullOrEmpty(pdfUrl)
@@ -418,7 +418,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         message.To.Add(MailboxAddress.Parse(toEmail));
 
         var caller = string.IsNullOrWhiteSpace(callerName) ? callerPhone : callerName;
-        message.Subject = $"New call summary — {caller}";
+        message.Subject = $"Gigahoo call summary — {caller}";
 
         // Metadata row (dateTimeDisplay is already localized to the account's timezone by the caller)
         var duration = $"{durationSeconds / 3600}h {(durationSeconds % 3600) / 60}m";
