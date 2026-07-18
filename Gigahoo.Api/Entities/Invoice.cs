@@ -10,7 +10,6 @@ public class Invoice
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "USD";
     public byte InvoiceStatusId { get; set; } = 1; // FK -> InvoiceStatus (1 = Paid)
-    public string? PdfUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public Account Account { get; set; } = null!;

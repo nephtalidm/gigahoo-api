@@ -126,9 +126,6 @@ public class StripeWebhookController(
             Amount = invoice.AmountPaid / 100m,
             Currency = invoice.Currency?.ToUpper() ?? "USD",
             InvoiceStatusId = (byte)Entities.InvoiceStatusId.Paid,
-            // InvoicePdf is the direct-download PDF; HostedInvoiceUrl is Stripe's web page —
-            // the dashboard's download icon must actually download.
-            PdfUrl = invoice.InvoicePdf,
             CreatedAt = DateTime.UtcNow,
         });
 
@@ -245,10 +242,20 @@ public class StripeWebhookController(
                 }
                 paidFor ??= receiptLine?.Description;
 
+                byte[]? pdfBytes = null;
+                if (!string.IsNullOrEmpty(invoice.InvoicePdf))
+                {
+                    try
+                    {
+                        using var http = new HttpClient();
+                        pdfBytes = await http.GetByteArrayAsync(invoice.InvoicePdf);
+                    }
+                    catch (Exception ex) { logger.LogWarning(ex, "Invoice PDF download failed for {Invoice} — receipt goes without attachment", invoice.Id); }
+                }
                 await email.SendPaymentReceiptAsync(
                     account.Email, account.BusinessName,
                     invoice.AmountPaid / 100m, invoice.Currency?.ToUpper() ?? "USD",
-                    invoice.Number ?? invoice.Id, paidFor, invoice.InvoicePdf);
+                    invoice.Number ?? invoice.Id, paidFor, pdfBytes);
             }
             catch (Exception ex) { logger.LogError(ex, "Payment receipt email failed for account {Account}", account.AccountId); }
         }

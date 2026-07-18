@@ -27,6 +27,5 @@ public record InvoiceResponse(
     DateTime DateUtc,
     decimal Amount,
     string Currency,
-    string Status,
-    string? PdfUrl
+    string Status
 );

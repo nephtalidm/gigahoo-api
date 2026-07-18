@@ -373,6 +373,22 @@ public class BillingController(
         return Ok(new { planId = account.PlanId });
     }
 
+    /// <summary>
+    /// Fresh PDF link for one of the account's invoices, fetched from Stripe at click time —
+    /// Stripe rotates invoice_pdf tokens, so stored URLs die.
+    /// </summary>
+    [HttpGet("invoices/{invoiceId:guid}/pdf-link")]
+    public async Task<IActionResult> GetInvoicePdfLink(Guid invoiceId)
+    {
+        var accountId = GetAccountId();
+        var row = await db.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && i.AccountId == accountId);
+        if (row is null || string.IsNullOrEmpty(row.StripeInvoiceId))
+            return NotFound(new { error = "Invoice not found" });
+        var url = await stripe.GetInvoicePdfUrlAsync(row.StripeInvoiceId);
+        if (url is null) return NotFound(new { error = "No PDF available for this invoice" });
+        return Ok(new { url });
+    }
+
     [HttpGet("invoices")]
     public async Task<ActionResult<List<InvoiceResponse>>> GetInvoices()
     {
@@ -381,7 +397,7 @@ public class BillingController(
             .Where(i => i.AccountId == accountId)
             .OrderByDescending(i => i.DateUtc)
             .Select(i => new InvoiceResponse(
-                i.InvoiceId, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.InvoiceStatus!.Name, i.PdfUrl
+                i.InvoiceId, i.InvoiceNumber, i.DateUtc, i.Amount, i.Currency, i.InvoiceStatus!.Name
             ))
             .ToListAsync();
 

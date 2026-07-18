@@ -12,6 +12,7 @@ public interface IStripeService
     Task<DirectSubscriptionResult> CreateDirectSubscriptionAsync(string customerId, string priceId, string? defaultPaymentMethodId);
     Task<DirectSubscriptionResult> GetDirectSubscriptionStateAsync(string subscriptionId);
     Task ChangeSubscriptionPriceAsync(string subscriptionId, string priceId);
+    Task<string?> GetInvoicePdfUrlAsync(string stripeInvoiceId);
 }
 
 /// <summary>Outcome of an EMBEDDED (no hosted page) subscription creation.</summary>
@@ -158,6 +159,15 @@ public class StripeService(IConfiguration config) : IStripeService
         var service = new SubscriptionService();
         service.Cancel(subscriptionId);
         return Task.CompletedTask;
+    }
+
+    /// <summary>Stripe ROTATES invoice_pdf URL tokens — stored copies go stale. Always
+    /// fetch the current one at click time.</summary>
+    public async Task<string?> GetInvoicePdfUrlAsync(string stripeInvoiceId)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+        var invoice = await new InvoiceService().GetAsync(stripeInvoiceId);
+        return invoice.InvoicePdf;
     }
 
     public Task<Subscription> GetSubscriptionAsync(string subscriptionId)

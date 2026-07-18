@@ -11,7 +11,7 @@ public interface IEmailService
     Task SendMagicLinkAsync(string toEmail, string magicLink, VerificationPurpose purpose = VerificationPurpose.SignIn);
     Task SendEmailChangeCodeAsync(string toEmail, string code);
     Task SendAccountDeletionCodeAsync(string toEmail, string code);
-    Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, string? pdfUrl);
+    Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, byte[]? pdfAttachment);
     Task SendContactNotificationAsync(string fromName, string fromEmail, string subject, string message);
     Task SendPhoneNumberAssignedAsync(string toEmail, string businessName, string phoneNumber);
     Task SendMinutesExhaustedAsync(string toEmail, string businessName);
@@ -137,7 +137,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         await SendAsync(message);
     }
 
-    public async Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, string? pdfUrl)
+    public async Task SendPaymentReceiptAsync(string toEmail, string businessName, decimal amount, string currency, string invoiceNumber, string? description, byte[]? pdfAttachment)
     {
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
@@ -145,11 +145,11 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         message.Subject = "Your Gigahoo receipt";
 
         description ??= "Subscription payment";
-        var pdfButton = string.IsNullOrEmpty(pdfUrl)
-            ? ""
-            : $"""
+        // The PDF rides ATTACHED (Stripe rotates its URL tokens, so links die); the button
+        // goes to the dashboard's Billing page, which fetches a fresh link on demand.
+        var pdfButton = $"""
                                 <div style="text-align:center; margin: 0 0 16px;">
-                                    <a href="{pdfUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 40px; border-radius: 10px;">Download invoice (PDF)</a>
+                                    <a href="https://gigahoo.ai/dashboard/billing" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 40px; border-radius: 10px;">View billing</a>
                                 </div>
               """;
 
@@ -176,7 +176,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                 </div>
             {{pdfButton}}
                                 <p style="margin:0;font-size:13px;color:#6b7280;text-align:center;">
-                                    You can find every invoice any time under Billing in your dashboard.
+                                    Your invoice is attached as a PDF. You can also find every invoice any time under Billing in your dashboard.
                                 </p>
                             </td></tr>
                         </table>
@@ -186,7 +186,10 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
             </html>
             """;
 
-        message.Body = new BodyBuilder { HtmlBody = body }.ToMessageBody();
+        var builder = new BodyBuilder { HtmlBody = body };
+        if (pdfAttachment is { Length: > 0 })
+            builder.Attachments.Add($"Gigahoo-Invoice-{invoiceNumber}.pdf", pdfAttachment, new MimeKit.ContentType("application", "pdf"));
+        message.Body = builder.ToMessageBody();
         await SendAsync(message);
     }
 
