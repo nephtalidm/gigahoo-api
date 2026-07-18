@@ -7,7 +7,6 @@ public interface IStripeService
     Task<string> CreateCustomerAsync(string email, string businessName);
     Task<string> CreateSubscriptionAsync(string customerId, string priceId);
     Task<string> CreateCheckoutSessionAsync(string customerId, string priceId, string successUrl, string cancelUrl);
-    Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl);
     Task CancelSubscriptionAsync(string subscriptionId);
     Task<Subscription> GetSubscriptionAsync(string subscriptionId);
     Task<DirectSubscriptionResult> CreateDirectSubscriptionAsync(string customerId, string priceId, string? defaultPaymentMethodId);
@@ -117,21 +116,6 @@ public class StripeService(IConfiguration config) : IStripeService
             PaymentBehavior = "allow_incomplete",
             Metadata = new Dictionary<string, string> { { "priceId", priceId } },
         });
-    }
-
-    public Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl)
-    {
-        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
-
-        var options = new Stripe.BillingPortal.SessionCreateOptions
-        {
-            Customer = customerId,
-            ReturnUrl = returnUrl,
-        };
-
-        var service = new Stripe.BillingPortal.SessionService();
-        var session = service.Create(options);
-        return Task.FromResult(session.Url);
     }
 
     public Task CancelSubscriptionAsync(string subscriptionId)

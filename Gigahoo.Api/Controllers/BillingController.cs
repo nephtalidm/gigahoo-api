@@ -334,20 +334,6 @@ public class BillingController(
         return Ok(invoices);
     }
 
-    [HttpPost("portal")]
-    public async Task<IActionResult> OpenPortal()
-    {
-        var accountId = GetAccountId();
-        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
-
-        var customerId = await payments.Default.EnsureCustomerAsync(account);
-
-        var returnUrl = $"{Request.Scheme}://{Request.Host}/dashboard/plan";
-        var url = await stripe.CreateBillingPortalSessionAsync(customerId, returnUrl);
-
-        return Ok(new { url });
-    }
-
     // Provider-agnostic payment-method management for the dashboard. The account
     // comes from the auth context. Multiple providers can be active at once: new
     // payments use the registry's Default, while existing methods are listed across
