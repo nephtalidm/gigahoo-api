@@ -102,7 +102,11 @@ public class AuthController(
 
         var code = await otp.GenerateAndStoreAsync(request.Email, "EmailMagicLink", TimeSpan.FromMinutes(15));
         var frontendUrl = config["Frontend:Url"] ?? "http://localhost:3000";
-        var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}";
+        // Resume-after-login: only same-site dashboard paths ride the link (open-redirect guard).
+        var safeNext = !string.IsNullOrEmpty(request.Next) && request.Next.StartsWith("/dashboard") && !request.Next.StartsWith("//")
+            ? request.Next : null;
+        var link = $"{frontendUrl}/auth/callback?email={Uri.EscapeDataString(request.Email)}&code={code}"
+            + (safeNext is null ? "" : $"&next={Uri.EscapeDataString(safeNext)}");
 
         await email.SendMagicLinkAsync(request.Email, link, exists ? VerificationPurpose.SignIn : VerificationPurpose.SignUp);
         logger.LogInformation("Magic link sent to {Email}", request.Email);

@@ -7,6 +7,11 @@ public record SendMagicLinkRequest
     [Required, EmailAddress, MaxLength(254)]
     public string Email { get; init; } = default!;
 
+    // Where to resume after login (e.g. /dashboard/billing from a receipt email's button).
+    // Embedded into the magic link; validated server-side to dashboard paths only.
+    [MaxLength(300)]
+    public string? Next { get; init; }
+
     // Selected market (ISO-2). Used to gate new-account signups from non-supported regions.
     [MaxLength(2)]
     public string? Country { get; init; }
