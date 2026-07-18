@@ -275,8 +275,8 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                 </div>
                 <p><strong>Next steps:</strong></p>
                 <ol>
-                    <li>Forward your existing business calls to this number</li>
-                    <li>Test the AI receptionist by calling the number yourself</li>
+                    <li style="margin-bottom: 12px;">Forward your existing business calls to this number</li>
+                    <li style="margin-bottom: 12px;">Test the AI receptionist by calling the number yourself</li>
                     <li>Configure your business details in the dashboard</li>
                 </ol>
                 <p style="color: #6b7280; font-size: 14px;">Need help? Contact us at contact@gigahoo.ai</p>
