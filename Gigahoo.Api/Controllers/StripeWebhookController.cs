@@ -352,19 +352,18 @@ public class StripeWebhookController(
         var account = await db.Accounts.FirstOrDefaultAsync(a => a.StripeSubscriptionId == subscription.Id);
         if (account is null) return;
 
-        // Release phone number back to pool (don't delete from Twilio)
+        // Return the number to the POOL — a pure DB detach. Never de-provision at the carrier
+        // here: purchased numbers are paid inventory (the old release path destroyed them).
         if (account.AssignedPhoneNumberId is not null)
         {
-            try
-            {
-                await twilio.ReleaseNumberFromAccountAsync(account.AccountId);
-                account.AssignedPhoneNumberId = null;
-                logger.LogInformation("Released phone number back to pool for account {Account}", account.AccountId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error releasing phone number for account {Account}", account.AccountId);
-            }
+            account.AssignedPhoneNumberId = null;
+            await db.PhoneNumbers
+                .Where(p => p.AssignedAccountId == account.AccountId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.AssignedAccountId, (Guid?)null)
+                    .SetProperty(p => p.PhoneNumberStatusId, (byte)Entities.PhoneNumberStatusId.Available)
+                    .SetProperty(p => p.AssignedAt, (DateTime?)null));
+            logger.LogInformation("Returned phone number to the pool for account {Account}", account.AccountId);
         }
 
         account.StripeSubscriptionId = null;

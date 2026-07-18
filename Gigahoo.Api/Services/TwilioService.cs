@@ -15,11 +15,9 @@ public interface ITwilioService
 {
     Task<PurchasedPhoneNumber?> PurchasePhoneNumberAsync(string countryCode);
     Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl);
-    Task ReleasePhoneNumberAsync(string phoneNumberSid);
     Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode);
     Task<Entities.PhoneNumber> AddPurchasedNumberToPoolAsync(PurchasedPhoneNumber purchased, string countryCode);
     Task AssignNumberToAccountAsync(Entities.PhoneNumber phoneNumber, Guid accountId);
-    Task ReleaseNumberFromAccountAsync(Guid accountId);
 }
 
 public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IConfiguration config) : ITwilioService
@@ -29,9 +27,6 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
 
     public Task ConfigureWebhookAsync(string phoneNumberSid, string webhookUrl)
         => telephony.ConfigureVoiceWebhookAsync(phoneNumberSid, webhookUrl);
-
-    public Task ReleasePhoneNumberAsync(string phoneNumberSid)
-        => telephony.ReleaseAsync(phoneNumberSid);
 
     public async Task<Entities.PhoneNumber?> GetAvailableNumberAsync(string countryCode)
     {
@@ -109,33 +104,4 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
         await db.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// Release the account's number. Calls the carrier to actually de-provision the
-    /// number, then flips the pool record back to Available.
-    /// </summary>
-    public async Task ReleaseNumberFromAccountAsync(Guid accountId)
-    {
-        var phoneNumber = await db.PhoneNumbers
-            .FirstOrDefaultAsync(p => p.AssignedAccountId == accountId && p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Assigned);
-
-        if (phoneNumber != null)
-        {
-            var reuseSids = (config["Telephony:ReuseNumberSids"] ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (reuseSids.Contains(phoneNumber.Sid))
-            {
-                // Reusable test number — free it but never de-provision at the carrier.
-                phoneNumber.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available;
-            }
-            else
-            {
-                // Actually de-provision at the carrier before flipping DB status.
-                await telephony.ReleaseAsync(phoneNumber.Sid);
-                phoneNumber.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Released;
-            }
-            phoneNumber.AssignedAccountId = null;
-
-            await db.SaveChangesAsync();
-        }
-    }
 }
