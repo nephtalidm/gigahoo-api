@@ -289,6 +289,21 @@ public class BillingController(
                 return Ok(new { status = "active" });
             }
 
+            // A still-pending attempt at the SAME price is RESUMED — its PaymentIntent is
+            // reusable, so a retry doesn't litter a new subscription per abandoned card form.
+            if (existing is { Status: "incomplete" } && existing.Items?.Data?.FirstOrDefault()?.Price?.Id == priceId)
+            {
+                var pending = await stripe.GetDirectSubscriptionStateAsync(account.StripeSubscriptionId);
+                if (pending.ClientSecret is not null)
+                {
+                    return Ok(new
+                    {
+                        status = pending.PaymentIntentStatus == "requires_action" ? "requires_action" : "requires_payment_method",
+                        clientSecret = pending.ClientSecret,
+                    });
+                }
+            }
+
             try { await stripe.CancelSubscriptionAsync(account.StripeSubscriptionId); }
             catch { /* already expired/canceled */ }
             account.StripeSubscriptionId = null;

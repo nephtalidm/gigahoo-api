@@ -10,6 +10,7 @@ public interface IStripeService
     Task CancelSubscriptionAsync(string subscriptionId);
     Task<Subscription> GetSubscriptionAsync(string subscriptionId);
     Task<DirectSubscriptionResult> CreateDirectSubscriptionAsync(string customerId, string priceId, string? defaultPaymentMethodId);
+    Task<DirectSubscriptionResult> GetDirectSubscriptionStateAsync(string subscriptionId);
     Task ChangeSubscriptionPriceAsync(string subscriptionId, string priceId);
 }
 
@@ -100,8 +101,28 @@ public class StripeService(IConfiguration config) : IStripeService
 
         var service = new SubscriptionService();
         var subscription = await service.CreateAsync(options);
+        return await ToDirectResultAsync(subscription);
+    }
+
+    /// <summary>Current state (+ fresh confirmation secret) of an existing embedded
+    /// subscription — lets an abandoned payment attempt be RESUMED instead of littering a
+    /// new subscription per retry.</summary>
+    public async Task<DirectSubscriptionResult> GetDirectSubscriptionStateAsync(string subscriptionId)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+
+        var service = new SubscriptionService();
+        var subscription = await service.GetAsync(subscriptionId, new SubscriptionGetOptions
+        {
+            Expand = ["latest_invoice.confirmation_secret"],
+        });
+        return await ToDirectResultAsync(subscription);
+    }
+
+    private static async Task<DirectSubscriptionResult> ToDirectResultAsync(Subscription subscription)
+    {
         var clientSecret = subscription.LatestInvoice?.ConfirmationSecret?.ClientSecret;
-        // The caller still branches on the underlying intent's status (requires_action = 3DS
+        // The caller branches on the underlying intent's status (requires_action = 3DS
         // confirm inline; requires_payment_method = collect a card) — read it from the intent
         // itself, whose id is the client secret's prefix.
         string? intentStatus = null;
