@@ -167,9 +167,15 @@ public class AccountController(
         }
         else
         {
-            // PAID plan: ensure the payment-provider customer exists (best-effort) via the
-            // provider seam, which owns the PaymentCustomer rows. The phone number is
-            // provisioned at checkout / the invoice.paid webhook.
+            // PAID plan: the choice is NOT trusted until money moves. The account is parked on
+            // the Free plan and the payment webhook flips it when the first invoice pays (the
+            // chosen plan travels through checkout/subscribe as the priceId). Persisting the
+            // paid PlanId here granted paid entitlements to accounts that never paid.
+            var freePlan = await db.Plans.FirstOrDefaultAsync(p => p.PriceMonthly == 0);
+            if (freePlan is not null) account.PlanId = freePlan.PlanId;
+            // Ensure the payment-provider customer exists (best-effort) via the provider seam,
+            // which owns the PaymentCustomer rows. The phone number is provisioned at
+            // checkout / the invoice.paid webhook.
             if (plan is not null)
             {
                 try { await payments.Default.EnsureCustomerAsync(account); }
