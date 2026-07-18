@@ -202,6 +202,109 @@ public class BillingController(
         return Ok(new CheckoutResponse(url));
     }
 
+    /// <summary>
+    /// EMBEDDED plan purchase/upgrade — the user never leaves the dashboard. Same validation and
+    /// reserve-then-charge as checkout, then: an existing subscription is re-priced in place
+    /// (prorated); otherwise a subscription is created charging the saved default card directly.
+    /// With no saved card (or when the charge needs 3DS), the PaymentIntent client secret comes
+    /// back and the in-app card form completes it.
+    /// </summary>
+    [HttpPost("subscribe")]
+    public async Task<IActionResult> Subscribe([FromBody] CheckoutRequest request)
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.Include(a => a.Plan).FirstAsync(a => a.AccountId == accountId);
+        var plan = await db.Plans.FindAsync(request.PlanId);
+
+        if (plan is null) return NotFound(new { error = "Plan not found" });
+        if (plan.PriceMonthly == 0) return BadRequest(new { error = "Free plans don't need checkout" });
+
+        var provider = payments.Default;
+        var providerRow = await db.Providers.FirstOrDefaultAsync(
+            p => p.Code == provider.Name && p.ProviderTypeId == (byte)Entities.ProviderTypeId.Payment);
+        if (providerRow is null)
+            return BadRequest(new { error = $"Payment provider '{provider.Name}' is not configured." });
+
+        var customerId = await provider.EnsureCustomerAsync(account);
+
+        var country = account.CountryCodeId is short cid ? await db.Countries.FindAsync(cid) : null;
+        var currency = country?.Currency?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(currency))
+            return BadRequest(new { error = "Could not determine a billing currency for this account's country" });
+        var billingCountrySupported = await db.Countries.AnyAsync(c => c.Code == country!.Code && c.IsSupported);
+        if (!billingCountrySupported)
+            return BadRequest(new { error = "Gigahoo is currently available only in the US and Canada." });
+
+        var planPrice = await db.PlanPrices.FirstOrDefaultAsync(pp => pp.PlanId == plan.PlanId && pp.Currency == currency && pp.ProviderId == providerRow.ProviderId && pp.IsActive);
+        if (planPrice is null || string.IsNullOrEmpty(planPrice.ProviderPriceId))
+            return BadRequest(new { error = $"No {provider.Name} price configured for plan '{plan.Name}' in {currency}" });
+        var priceId = planPrice.ProviderPriceId;
+
+        // Reserve-then-charge: same rule as checkout — never take payment for a number we
+        // can't deliver.
+        if (account.AssignedPhoneNumberId is null)
+        {
+            var numberCountryCode = country?.Code ?? "US";
+            try
+            {
+                var phoneNumber = await twilio.GetAvailableNumberAsync(numberCountryCode);
+                if (phoneNumber == null)
+                {
+                    var purchased = await twilio.PurchasePhoneNumberAsync(numberCountryCode);
+                    if (purchased is not null)
+                        phoneNumber = await twilio.AddPurchasedNumberToPoolAsync(purchased, numberCountryCode);
+                }
+                if (phoneNumber == null)
+                    return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
+
+                await twilio.AssignNumberToAccountAsync(phoneNumber, account.AccountId);
+                account.AssignedPhoneNumberId = phoneNumber.PhoneNumberId;
+                await twilio.ConfigureWebhookAsync(phoneNumber.Sid, $"{config["VoiceAgent:PublicUrl"]}/twilio/voice?accountId={account.AccountId}");
+                account.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error reserving phone number for account {Account} before subscribe", account.AccountId);
+                return BadRequest(new { error = "We couldn't reserve a phone number for your area right now — you have not been charged. Please try again shortly." });
+            }
+        }
+
+        // Existing subscription: re-price it in place (prorated) with the card already on file.
+        if (!string.IsNullOrEmpty(account.StripeSubscriptionId))
+        {
+            await stripe.ChangeSubscriptionPriceAsync(account.StripeSubscriptionId, priceId);
+            account.PlanId = plan.PlanId;
+            account.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Ok(new { status = "active" });
+        }
+
+        // New subscription: charge the saved default card directly if there is one.
+        var methods = await provider.ListPaymentMethodsAsync(customerId);
+        var defaultPm = methods.FirstOrDefault(m => m.IsDefault) ?? methods.FirstOrDefault();
+
+        var result = await stripe.CreateDirectSubscriptionAsync(customerId, priceId, defaultPm?.Id);
+        account.StripeSubscriptionId = result.SubscriptionId;
+        if (result.Status is "active" or "trialing")
+        {
+            // Paid on the spot — flip the plan now; webhooks keep the period dates in sync.
+            account.PlanId = plan.PlanId;
+            account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
+            account.BillingPeriodEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(1));
+        }
+        account.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        if (result.Status is "active" or "trialing")
+            return Ok(new { status = "active" });
+        return Ok(new
+        {
+            status = result.PaymentIntentStatus == "requires_action" ? "requires_action" : "requires_payment_method",
+            clientSecret = result.ClientSecret,
+        });
+    }
+
     [HttpGet("invoices")]
     public async Task<ActionResult<List<InvoiceResponse>>> GetInvoices()
     {

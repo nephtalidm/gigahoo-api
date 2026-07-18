@@ -300,6 +300,16 @@ public class StripeWebhookController(
 
         if (subscription.Status == "active")
         {
+            // EMBEDDED subscriptions never pass through checkout.session.completed — the plan is
+            // mapped from the subscription's own priceId metadata (set at create/re-price time).
+            var priceId = subscription.Metadata?.GetValueOrDefault("priceId");
+            if (!string.IsNullOrEmpty(priceId))
+            {
+                var plan = await db.Plans.FirstOrDefaultAsync(p => config[$"Stripe:PriceIds:{p.PlanId}"] == priceId);
+                if (plan is not null && account.PlanId != plan.PlanId)
+                    account.PlanId = plan.PlanId;
+            }
+
             var periodStart = subscription.CurrentPeriodStart;
             var periodEnd = subscription.CurrentPeriodEnd;
 

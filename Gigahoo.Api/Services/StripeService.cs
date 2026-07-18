@@ -10,7 +10,12 @@ public interface IStripeService
     Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl);
     Task CancelSubscriptionAsync(string subscriptionId);
     Task<Subscription> GetSubscriptionAsync(string subscriptionId);
+    Task<DirectSubscriptionResult> CreateDirectSubscriptionAsync(string customerId, string priceId, string? defaultPaymentMethodId);
+    Task ChangeSubscriptionPriceAsync(string subscriptionId, string priceId);
 }
+
+/// <summary>Outcome of an EMBEDDED (no hosted page) subscription creation.</summary>
+public record DirectSubscriptionResult(string SubscriptionId, string Status, string? PaymentIntentStatus, string? ClientSecret);
 
 public class StripeService(IConfiguration config) : IStripeService
 {
@@ -69,6 +74,49 @@ public class StripeService(IConfiguration config) : IStripeService
         var service = new Stripe.Checkout.SessionService();
         var session = service.Create(options);
         return Task.FromResult(session.Url);
+    }
+
+    public async Task<DirectSubscriptionResult> CreateDirectSubscriptionAsync(string customerId, string priceId, string? defaultPaymentMethodId)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+
+        var options = new SubscriptionCreateOptions
+        {
+            Customer = customerId,
+            Items = [new SubscriptionItemOptions { Price = priceId }],
+            // Saved card: attempt the charge NOW ("allow_incomplete" surfaces requires_action for
+            // 3DS instead of failing). No card: "default_incomplete" leaves an unconfirmed
+            // PaymentIntent that the in-app card form confirms.
+            PaymentBehavior = defaultPaymentMethodId is null ? "default_incomplete" : "allow_incomplete",
+            DefaultPaymentMethod = defaultPaymentMethodId,
+            // A card entered in the in-app form becomes the subscription's default for renewals.
+            PaymentSettings = new SubscriptionPaymentSettingsOptions { SaveDefaultPaymentMethod = "on_subscription" },
+            // The plan flip is webhook-driven and data-mapped from this priceId (no checkout
+            // session exists on the embedded path).
+            Metadata = new Dictionary<string, string> { { "priceId", priceId } },
+        };
+        options.AddExpand("latest_invoice.payment_intent");
+
+        var service = new SubscriptionService();
+        var subscription = await service.CreateAsync(options);
+        var intent = subscription.LatestInvoice?.PaymentIntent;
+        return new DirectSubscriptionResult(subscription.Id, subscription.Status, intent?.Status, intent?.ClientSecret);
+    }
+
+    public async Task ChangeSubscriptionPriceAsync(string subscriptionId, string priceId)
+    {
+        StripeConfiguration.ApiKey = config["Stripe:SecretKey"];
+
+        var service = new SubscriptionService();
+        var subscription = await service.GetAsync(subscriptionId);
+        await service.UpdateAsync(subscriptionId, new SubscriptionUpdateOptions
+        {
+            // Swap the single plan item in place; prorate the difference on the next invoice.
+            Items = [new SubscriptionItemOptions { Id = subscription.Items.Data[0].Id, Price = priceId }],
+            ProrationBehavior = "create_prorations",
+            PaymentBehavior = "allow_incomplete",
+            Metadata = new Dictionary<string, string> { { "priceId", priceId } },
+        });
     }
 
     public Task<string> CreateBillingPortalSessionAsync(string customerId, string returnUrl)
