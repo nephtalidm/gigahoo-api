@@ -211,7 +211,7 @@ public class StripeWebhookController(
             {
                 try
                 {
-                    await smsProvider.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{assignedNumber}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai");
+                    await smsProvider.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{assignedNumber}\n\nNext steps:\n1. Forward your existing business calls to this number\n\n2. Test the AI receptionist by calling the number yourself\n\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai");
                 }
                 catch (Exception smsEx)
                 {

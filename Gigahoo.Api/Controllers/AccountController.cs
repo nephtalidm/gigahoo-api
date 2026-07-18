@@ -161,7 +161,7 @@ public class AccountController(
             var ownerPhone = account.BusinessPhoneNumber;
             if (!string.IsNullOrEmpty(ownerPhone))
             {
-                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{number!.Number}\n\nNext steps:\n1. Forward your existing business calls to this number\n2. Test the AI receptionist by calling the number yourself\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
+                try { await sms.SendAsync(ownerPhone, $"Welcome to Gigahoo!\n\nHi {account.BusinessName}, your dedicated phone number is ready to receive calls:\n{number!.Number}\n\nNext steps:\n1. Forward your existing business calls to this number\n\n2. Test the AI receptionist by calling the number yourself\n\n3. Configure your business details in the dashboard\n\nNeed help? Contact us at contact@gigahoo.ai"); }
                 catch (Exception ex) { logger.LogError(ex, "Free welcome SMS failed for account {Account}", account.AccountId); }
             }
         }
