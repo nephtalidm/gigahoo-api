@@ -10,7 +10,8 @@ public record ConversationResponse(
     string? Summary,
     string? Address,
     bool IsEmergency,
-    string Status
+    string Status,
+    string? Transcript = null
 );
 
 public record ConversationsPageResponse(

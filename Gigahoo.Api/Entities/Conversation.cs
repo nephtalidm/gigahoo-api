@@ -9,6 +9,9 @@ public class Conversation
     public int DurationSeconds { get; set; }
     public byte? LanguageId { get; set; }
     public string? Summary { get; set; }
+    // Full verbatim call transcript (one line per turn). The summary is for triage;
+    // this is the receipt. Null for SMS/legacy rows.
+    public string? Transcript { get; set; }
     public string? Address { get; set; }
     public bool IsEmergency { get; set; }
     public byte ConversationStatusId { get; set; } = 1; // FK -> ConversationStatus (1 = Missed)

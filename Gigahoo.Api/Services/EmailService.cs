@@ -110,6 +110,12 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
                                     </td>
                                 </tr>
 
+                                <!-- View conversation: the summary is for triage, the full transcript lives in the dashboard -->
+                                <tr>
+                                    <td style="padding: 0 40px 32px; text-align: center;">
+                                        <a href="https://gigahoo.ai/dashboard/call-history" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 8px;">View conversation</a>
+                                    </td>
+                                </tr>
                                 <!-- Footer -->
                                 <tr>
                                     <td style="padding: 24px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">

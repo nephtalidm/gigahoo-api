@@ -161,6 +161,7 @@ public class VoiceAgentController(
             DurationSeconds = request.DurationSeconds,
             LanguageId = request.LanguageId ?? 1, // Default to English
             Summary = request.Summary,
+            Transcript = request.Transcript,
             Address = request.Address,
             IsEmergency = request.IsEmergency,
             ConversationStatusId = (byte)(Enum.TryParse<Entities.ConversationStatusId>(request.Status, ignoreCase: true, out var cs)
@@ -296,5 +297,6 @@ public record CreateConversationRequest(
     string Status,
     string? Address = null,
     string? Language = null,
-    bool IsEmergency = false
+    bool IsEmergency = false,
+    string? Transcript = null
 );

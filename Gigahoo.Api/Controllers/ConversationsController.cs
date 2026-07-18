@@ -54,7 +54,8 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
                 c.Summary,
                 c.Address,
                 c.IsEmergency,
-                c.ConversationStatus!.Name
+                c.ConversationStatus!.Name,
+                c.Transcript
             ))
             .ToListAsync();
 
@@ -83,7 +84,8 @@ public class ConversationsController(GigahooDbContext db) : ControllerBase
             conversation.Summary,
             conversation.Address,
             conversation.IsEmergency,
-            conversation.ConversationStatus!.Name
+            conversation.ConversationStatus!.Name,
+            conversation.Transcript
         ));
     }
 }
