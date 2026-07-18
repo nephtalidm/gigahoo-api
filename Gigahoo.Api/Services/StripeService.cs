@@ -58,7 +58,12 @@ public class StripeService(IConfiguration config) : IStripeService
             LineItems = [new Stripe.Checkout.SessionLineItemOptions { Price = priceId, Quantity = 1 }],
             SuccessUrl = successUrl,
             CancelUrl = cancelUrl,
-            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions { Metadata = { { "priceId", priceId } } },
+            SubscriptionData = new Stripe.Checkout.SessionSubscriptionDataOptions
+            {
+                // Metadata defaults to null on the SDK options — it must be newed up; a bare
+                // collection initializer NREs before Stripe is ever called.
+                Metadata = new Dictionary<string, string> { { "priceId", priceId } },
+            },
         };
 
         var service = new Stripe.Checkout.SessionService();
