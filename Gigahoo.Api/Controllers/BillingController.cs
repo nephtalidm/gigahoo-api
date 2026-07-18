@@ -334,6 +334,45 @@ public class BillingController(
         });
     }
 
+    /// <summary>
+    /// EMBEDDED payment epilogue: the card was just confirmed client-side, but the plan flip
+    /// normally rides the webhook — which races the user's first dashboard render (a fresh
+    /// subscriber saw "Free" until a manual reload). This reads the subscription straight from
+    /// Stripe and applies the same PlanPrice mapping immediately; the webhook remains the
+    /// backup for every other path.
+    /// </summary>
+    [HttpPost("sync-subscription")]
+    public async Task<IActionResult> SyncSubscription()
+    {
+        var accountId = GetAccountId();
+        var account = await db.Accounts.FirstAsync(a => a.AccountId == accountId);
+        if (string.IsNullOrEmpty(account.StripeSubscriptionId))
+            return Ok(new { planId = account.PlanId });
+
+        Stripe.Subscription subscription;
+        try { subscription = await stripe.GetSubscriptionAsync(account.StripeSubscriptionId); }
+        catch { return Ok(new { planId = account.PlanId }); }
+
+        if (subscription.Status is "active" or "trialing")
+        {
+            var item = subscription.Items?.Data?.FirstOrDefault();
+            var priceId = item?.Price?.Id;
+            var planId = priceId is null ? null : await db.PlanPrices
+                .Where(pp => pp.ProviderPriceId == priceId)
+                .Select(pp => (byte?)pp.PlanId)
+                .FirstOrDefaultAsync();
+            if (planId is byte pid && account.PlanId != pid)
+                account.PlanId = pid;
+            if (item is not null && item.CurrentPeriodStart != default)
+                account.BillingPeriodStart = DateOnly.FromDateTime(item.CurrentPeriodStart);
+            if (item is not null && item.CurrentPeriodEnd != default)
+                account.BillingPeriodEnd = DateOnly.FromDateTime(item.CurrentPeriodEnd);
+            account.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+        return Ok(new { planId = account.PlanId });
+    }
+
     [HttpGet("invoices")]
     public async Task<ActionResult<List<InvoiceResponse>>> GetInvoices()
     {
