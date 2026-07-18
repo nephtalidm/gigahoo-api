@@ -64,8 +64,26 @@ public class TwilioService(GigahooDbContext db, ITelephonyProvider telephony, IC
             .Where(p => p.CountryId == countryId && p.ProviderId == providerId && p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Available)
             .OrderBy(p => p.PurchasedAt)
             .FirstOrDefaultAsync();
+        if (availableNumber is not null) return availableNumber;
 
-        return availableNumber;
+        // SELF-HEAL before spending money: a number marked Assigned whose account is gone
+        // (FK nulled, or the account row no longer exists — manual row deletions produce
+        // exactly this) is orphaned inventory, not a reason to purchase another number.
+        // Reclaim it to Available and hand it out.
+        var orphan = await db.PhoneNumbers
+            .Where(p => p.CountryId == countryId && p.ProviderId == providerId
+                && p.PhoneNumberStatusId == (byte)Entities.PhoneNumberStatusId.Assigned
+                && (p.AssignedAccountId == null || !db.Accounts.Any(a => a.AccountId == p.AssignedAccountId)))
+            .OrderBy(p => p.PurchasedAt)
+            .FirstOrDefaultAsync();
+        if (orphan is not null)
+        {
+            orphan.PhoneNumberStatusId = (byte)Entities.PhoneNumberStatusId.Available;
+            orphan.AssignedAccountId = null;
+            orphan.AssignedAt = null;
+            await db.SaveChangesAsync();
+        }
+        return orphan;
     }
 
     // Adds a freshly-purchased carrier number to the pool, resolving the Country
