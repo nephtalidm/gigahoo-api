@@ -142,7 +142,7 @@ public class EmailService(IConfiguration config, ILogger<EmailService> logger) :
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(config["Email:FromAddress"]!));
         message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = $"Gigahoo — payment received ({currency} {amount:0.00})";
+        message.Subject = "Your Gigahoo receipt";
 
         description ??= "Subscription payment";
         var pdfButton = string.IsNullOrEmpty(pdfUrl)
