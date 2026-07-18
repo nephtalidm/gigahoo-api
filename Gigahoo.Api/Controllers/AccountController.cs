@@ -445,12 +445,12 @@ public class AccountController(
         var valid = await otp.VerifyAsync(accountId.ToString(), "AccountDelete", request.Code);
         if (!valid) return BadRequest(new { error = "Invalid or expired code" });
 
-        // 1. Release the assigned number (provider-side webhook cleanup is best-effort;
-        //    the pool rows are detached unconditionally so no orphaned assignment remains).
+        // 1. Return the assigned number to the POOL — never de-provision at the carrier here.
+        //    Purchased numbers are paid inventory; destroying them on account deletion
+        //    (ReleaseNumberFromAccountAsync's default for non-reuse Sids) would burn a number
+        //    the next signup could use. Carrier release belongs to a future lapse/cleanup job.
         if (account.AssignedPhoneNumberId is not null)
         {
-            try { await twilio.ReleaseNumberFromAccountAsync(account.AccountId); }
-            catch (Exception ex) { logger.LogError(ex, "Number release failed while deleting account {Account}", accountId); }
             account.AssignedPhoneNumberId = null;
             await db.SaveChangesAsync();
         }
