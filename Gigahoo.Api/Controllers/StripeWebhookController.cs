@@ -310,8 +310,11 @@ public class StripeWebhookController(
                     account.PlanId = plan.PlanId;
             }
 
-            var periodStart = subscription.CurrentPeriodStart;
-            var periodEnd = subscription.CurrentPeriodEnd;
+            // Stripe API basil+ (SDK v49+): the billing period lives on the subscription ITEM,
+            // no longer on the subscription object itself.
+            var firstItem = subscription.Items?.Data?.FirstOrDefault();
+            var periodStart = firstItem?.CurrentPeriodStart ?? default;
+            var periodEnd = firstItem?.CurrentPeriodEnd ?? default;
 
             // Detect the start of a new billing period and reset usage metering.
             if (periodStart != default)

@@ -94,12 +94,24 @@ public class StripeService(IConfiguration config) : IStripeService
             // session exists on the embedded path).
             Metadata = new Dictionary<string, string> { { "priceId", priceId } },
         };
-        options.AddExpand("latest_invoice.payment_intent");
+        // Stripe API basil+ (SDK v49+): the invoice no longer carries a payment_intent — the
+        // client secret comes from the invoice's confirmation_secret instead.
+        options.AddExpand("latest_invoice.confirmation_secret");
 
         var service = new SubscriptionService();
         var subscription = await service.CreateAsync(options);
-        var intent = subscription.LatestInvoice?.PaymentIntent;
-        return new DirectSubscriptionResult(subscription.Id, subscription.Status, intent?.Status, intent?.ClientSecret);
+        var clientSecret = subscription.LatestInvoice?.ConfirmationSecret?.ClientSecret;
+        // The caller still branches on the underlying intent's status (requires_action = 3DS
+        // confirm inline; requires_payment_method = collect a card) — read it from the intent
+        // itself, whose id is the client secret's prefix.
+        string? intentStatus = null;
+        if (clientSecret is not null && clientSecret.StartsWith("pi_"))
+        {
+            var intentId = clientSecret[..clientSecret.IndexOf("_secret", StringComparison.Ordinal)];
+            try { intentStatus = (await new PaymentIntentService().GetAsync(intentId)).Status; }
+            catch { /* unknown status -> treated as requires_payment_method by the caller */ }
+        }
+        return new DirectSubscriptionResult(subscription.Id, subscription.Status, intentStatus, clientSecret);
     }
 
     public async Task ChangeSubscriptionPriceAsync(string subscriptionId, string priceId)
