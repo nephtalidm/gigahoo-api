@@ -81,12 +81,15 @@ public class StripeWebhookController(
         {
             account.StripeSubscriptionId = session.SubscriptionId;
 
-            // Map plan from Stripe metadata or default to Starter
+            // Map the plan from the priceId metadata via the PlanPrice table — the same
+            // data-driven source the subscribe endpoint sells from (no config mapping).
             var priceId = session.Metadata?.GetValueOrDefault("priceId");
-            var plan = await db.Plans.FirstOrDefaultAsync(p =>
-                config[$"Stripe:PriceIds:{p.PlanId}"] == priceId);
-            if (plan is not null)
-                account.PlanId = plan.PlanId;
+            var planId = priceId is null ? null : await db.PlanPrices
+                .Where(pp => pp.ProviderPriceId == priceId)
+                .Select(pp => (byte?)pp.PlanId)
+                .FirstOrDefaultAsync();
+            if (planId is byte pid)
+                account.PlanId = pid;
 
             // Initialize the billing period and reset usage metering for the new subscription.
             account.BillingPeriodStart = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -301,13 +304,17 @@ public class StripeWebhookController(
         if (subscription.Status == "active")
         {
             // EMBEDDED subscriptions never pass through checkout.session.completed — the plan is
-            // mapped from the subscription's own priceId metadata (set at create/re-price time).
+            // mapped from the subscription's own priceId metadata (set at create/re-price time)
+            // via the PlanPrice table, the same data-driven source the subscribe endpoint uses.
             var priceId = subscription.Metadata?.GetValueOrDefault("priceId");
             if (!string.IsNullOrEmpty(priceId))
             {
-                var plan = await db.Plans.FirstOrDefaultAsync(p => config[$"Stripe:PriceIds:{p.PlanId}"] == priceId);
-                if (plan is not null && account.PlanId != plan.PlanId)
-                    account.PlanId = plan.PlanId;
+                var planId = await db.PlanPrices
+                    .Where(pp => pp.ProviderPriceId == priceId)
+                    .Select(pp => (byte?)pp.PlanId)
+                    .FirstOrDefaultAsync();
+                if (planId is byte pid && account.PlanId != pid)
+                    account.PlanId = pid;
             }
 
             // Stripe API basil+ (SDK v49+): the billing period lives on the subscription ITEM,
