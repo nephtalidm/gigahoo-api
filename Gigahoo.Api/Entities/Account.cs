@@ -53,6 +53,8 @@ public class Account
 
     // AI voice agent settings: custom call greeting + selected voice (NULL = default).
     public string? GreetingMessage { get; set; }
+    // Owner-provided facts (services, prices, areas, policies) the agent answers callers from.
+    public string? BusinessKnowledge { get; set; }
     public int? AgentVoiceId { get; set; }      // FK -> AgentVoice
     public AgentVoice? AgentVoice { get; set; }
 

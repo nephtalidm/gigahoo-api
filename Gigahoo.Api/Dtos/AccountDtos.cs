@@ -127,6 +127,7 @@ public record AccountResponse(
     bool EmailCallNotifications,
     bool SmsCallNotifications,
     string? GreetingMessage,
+    string? BusinessKnowledge,
     string? AgentVoice,
     int? MaximumCallMinutes,
     string AccountLanguage,
@@ -146,13 +147,17 @@ public record UpdateAccountLanguageRequest
 public record VoiceSettingsResponse(
     string? Greeting,
     string? AgentVoice,
-    int? MaximumCallMinutes
+    int? MaximumCallMinutes,
+    string? BusinessKnowledge = null
 );
 
 public record UpdateVoiceSettingsRequest
 {
     [MaxLength(500)]
     public string? GreetingMessage { get; init; }
+
+    [MaxLength(2000)]
+    public string? BusinessKnowledge { get; init; }
 
     [MaxLength(50)]
     public string? AgentVoice { get; init; }

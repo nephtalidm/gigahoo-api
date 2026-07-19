@@ -603,12 +603,13 @@ public class AccountController(
             return BadRequest(new { error = "Maximum call length must be between 1 and 120 minutes." });
 
         account.GreetingMessage = greeting;
+        account.BusinessKnowledge = string.IsNullOrWhiteSpace(request.BusinessKnowledge) ? null : request.BusinessKnowledge.Trim();
         account.AgentVoiceId = agentVoiceId;
         account.MaximumCallMinutes = maxCallMinutes;
         account.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok(new VoiceSettingsResponse(account.GreetingMessage, agentVoice, account.MaximumCallMinutes));
+        return Ok(new VoiceSettingsResponse(account.GreetingMessage, agentVoice, account.MaximumCallMinutes, account.BusinessKnowledge));
     }
 
     [HttpPut("language")]
@@ -685,6 +686,7 @@ public class AccountController(
             account.ShouldSendCallSummaryEmail,
             account.ShouldSendCallSummarySms,
             account.GreetingMessage,
+            account.BusinessKnowledge,
             account.AgentVoiceId is null ? null : await db.AgentVoices
                 .Where(v => v.AgentVoiceId == account.AgentVoiceId)
                 .Select(v => v.ReferenceId)
