@@ -121,6 +121,18 @@ try
             config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         });
 
+        // Homepage chat: a REAL per-IP limit — an anonymous LLM endpoint is a free-tokens
+        // faucet without one. 12 messages/minute is generous for a human, useless for abuse.
+        options.AddPolicy("chat", context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "anon",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = 12,
+                    QueueLimit = 0,
+                }));
+
         options.OnRejected = async (context, ct) =>
         {
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
