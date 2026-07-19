@@ -153,7 +153,7 @@ public record VoiceSettingsResponse(
 
 public record UpdateVoiceSettingsRequest
 {
-    [MaxLength(500)]
+    [MaxLength(100)]
     public string? GreetingMessage { get; init; }
 
     [MaxLength(2000)]
